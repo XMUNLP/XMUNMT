@@ -17,7 +17,7 @@ from utils import update_option, add_parameters, uniform_tensor
 # 2. bias: boolean, True to use bias, False not to use bias
 # 3. weight: boolean, True stands for Wx, False stands for xW
 # 4. variant: str, 'standard' or 'tied-weight'
-# 4. target: target device, default auto
+# 4. target: target device, default 'auto'
 class linear:
 
     def __init__(self, input_size, output_size, **option):

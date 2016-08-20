@@ -25,7 +25,7 @@ def process(n1, n2, tok = None):
     fd.close()
     fw.close()
 
-def parsearg():
+def parseargs():
     desc = 'characterize corpus'
     parser = argparse.ArgumentParser(description = desc)
 
@@ -39,6 +39,6 @@ def parsearg():
     return parser.parse_args()
 
 if __name__ == '__main__':
-    args = parsearg()
+    args = parseargs()
 
     process(args.corpus, args.output, args.token)
