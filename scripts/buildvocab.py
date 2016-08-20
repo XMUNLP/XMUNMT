@@ -111,7 +111,7 @@ def create_dictionary(name, lim = 0):
 
     return vocab
 
-def parsearg():
+def parseargs():
     desc = 'build vocabulary'
     parser = argparse.ArgumentParser(description = desc)
 
@@ -127,7 +127,7 @@ def parsearg():
     parser.add_argument('--alpha', action = 'store_true', help = 'desc')
     desc = 'add token'
     parser.add_argument('--token', type = str, help = desc)
-    desc = 'groundhog'
+    desc = 'compatible with groundhog'
     parser.add_argument('--groundhog', action = 'store_true', help = 'desc')
 
     return parser.parse_args()
@@ -158,11 +158,12 @@ def buildvocab(args):
     save(args.output, vocab)
 
 if __name__ == '__main__':
-    args = parsearg()
+    args = parseargs()
 
     if args.groundhog:
         vocab = create_dictionary(args.corpus, args.limit)
-        save(args.output, vocab)
+        fd = open(args.output, 'w')
+        cPickle.dump(vocab, fd)
+        fd.close()
     else:
         buildvocab(args)
-
