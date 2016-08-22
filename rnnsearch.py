@@ -127,7 +127,7 @@ def validate(scorpus, tcorpus, model, batch):
 
     return bpc
 
-def translate(model, corpus):
+def translate(model, corpus, **opt):
     fd = open(corpus, 'r')
     svocab = model.option['vocabulary'][0][0]
     trans = []
@@ -135,7 +135,7 @@ def translate(model, corpus):
     for line in fd:
         line = line.strip()
         data, mask = processdata([line], svocab)
-        hls = beamsearch(model, data)
+        hls = beamsearch(model, data, **opt)
         if len(hls) > 0:
             best, score = hls[0]
             trans.append(best[:-1])
@@ -225,6 +225,19 @@ def parseargs_train(args):
     desc = 'validate frequency, default 1000'
     parser.add_argument('--vfreq', type = int, help = desc)
 
+    # control beamsearch
+    desc = 'beam size'
+    parser.add_argument('--beam-size', type = int, help = desc)
+    # normalize
+    desc = 'normalize'
+    parser.add_argument('--normalize', type = bool, help = desc)
+    # max length
+    desc = 'max translation length'
+    parser.add_argument('--maxlen', type = int, help = desc)
+    # min length
+    desc = 'min translation length'
+    parser.add_argument('--minlen', type = int, help = desc)
+
     return parser.parse_args(args)
 
 def parseargs_decode(args):
@@ -286,6 +299,12 @@ def getoption():
     option['seed'] = 1234
     option['validate'] = None
     option['ref'] = None
+
+    # beam search
+    option['beamsize'] = 10
+    option['normalize'] = False
+    option['maxlen'] = None
+    option['minlen'] = None
 
     return option
 
@@ -350,12 +369,23 @@ def override(option, args):
     override_if_not_none(option, args, 'sfreq')
     override_if_not_none(option, args, 'seed')
 
+    # beamsearch
+    override_if_not_none(option, args, 'beam_size')
+    override_if_not_none(option, args, 'normalize')
+    override_if_not_none(option, args, 'maxlen')
+    override_if_not_none(option, args, 'minlen')
+
 def print_option(option):
+    isvocab = option['vocabulary'][0][1]
+    itvocab = option['vocabulary'][1][1]
+    
     print ''
     print 'options'
 
     print 'corpus:', option['corpus']
     print 'vocab:', option['vocab']
+    # excluding <eos> symbol
+    print 'vocabsize:', [len(isvocab) - 1, len(itvocab) - 1]
 
     print 'embdim:', option['embdim']
     print 'hidden:', option['hidden']
@@ -378,6 +408,11 @@ def print_option(option):
     print 'vfreq:', option['vfreq']
     print 'sfreq:', option['sfreq']
     print 'seed:', option['seed']
+
+    print 'beamsize:', option['beamsize']
+    print 'normalize:', option['normalize']
+    print 'maxlen:', option['maxlen']
+    print 'minlen:', option['minlen']
 
 def skipstream(stream, count):
     for i in range(count):
@@ -427,6 +462,7 @@ def train(args):
         model = rnnsearch(**option)
         uniform(model.parameter, -0.08, 0.08)
 
+    # tuning option
     toption = {}
     toption['algorithm'] = option['optimizer']
     toption['variant'] = option['variant']
@@ -435,6 +471,13 @@ def train(args):
     toption['initialize'] = option['shared'] if 'shared' in option else False
     trainer = optimizer(model, **toption)
     alpha = option['alpha']
+
+    # beamsearch option
+    doption = {}
+    doption['beamsize'] = option['beamsize']
+    doption['normalize'] = option['normalize']
+    doption['maxlen'] = option['maxlen']
+    doption['minlen'] = option['minlen']
 
     print 'parameters:', parameters(model.parameter)
 
@@ -470,7 +513,7 @@ def train(args):
 
             if count % option['vfreq'] == 0:
                 if option['validate'] and references:
-                    trans = translate(model, option['validate'])
+                    trans = translate(model, option['validate'], **doption)
                     bleu_score = bleu(trans, references)
                     print 'bleu: %2.4f' % bleu_score
                     if bleu_score > best_score:
@@ -497,11 +540,10 @@ def train(args):
                     print tdata
                     print 'warning: no translation'
 
-
         print '--------------------------------------------------'
 
         if option['vfreq'] and references:
-            trans = translate(model, option['validate'])
+            trans = translate(model, option['validate'], **doption)
             bleu_score = bleu(trans, references)
             print 'iter: %d, bleu: %2.4f' % (i + 1, bleu_score)
             if bleu_score > best_score:

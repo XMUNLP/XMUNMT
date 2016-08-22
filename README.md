@@ -67,3 +67,8 @@ An implementation of RNNsearch using theano, the implementation is the same with
 ```
   python rnnsearch.py train --model nmt.autosave.pkl
 ```
+
+## How to get deterministic results
+1. Add ```optimizer_excluding = cudnn``` to .theanorc
+2. Using AdvancedIncSubtensor1 op instead of AdvancedIncSubtensor1_dev20 op,
+see [here](https://github.com/Theano/Theano/issues/3029)
