@@ -227,10 +227,10 @@ def parseargs_train(args):
 
     # control beamsearch
     desc = 'beam size'
-    parser.add_argument('--beam-size', type = int, help = desc)
+    parser.add_argument('--beamsize', type = int, help = desc)
     # normalize
     desc = 'normalize probability by the length of cadidate sentences'
-    parser.add_argument('--normalize', type = bool, help = desc)
+    parser.add_argument('--normalize', type = int, help = desc)
     # max length
     desc = 'max translation length'
     parser.add_argument('--maxlen', type = int, help = desc)
@@ -250,7 +250,7 @@ def parseargs_decode(args):
     parser.add_argument('--model', required = True, help = desc)
     # beam size
     desc = 'beam size'
-    parser.add_argument('--beam-size', default = 10, type = int, help = desc)
+    parser.add_argument('--beamsize', default = 10, type = int, help = desc)
     # normalize
     desc = 'normalize probability by the length of cadidate sentences'
     parser.add_argument('--normalize', action = 'store_true', help = desc)
@@ -371,7 +371,7 @@ def override(option, args):
     override_if_not_none(option, args, 'seed')
 
     # beamsearch
-    override_if_not_none(option, args, 'beam_size')
+    override_if_not_none(option, args, 'beamsize')
     override_if_not_none(option, args, 'normalize')
     override_if_not_none(option, args, 'maxlen')
     override_if_not_none(option, args, 'minlen')
@@ -591,7 +591,7 @@ def decode(args):
     option = {}
     option['maxlen'] = args.maxlen
     option['minlen'] = args.minlen
-    option['beamsize'] = args.beam_size
+    option['beamsize'] = args.beamsize
     option['normalize'] = args.normalize
 
     while True:
