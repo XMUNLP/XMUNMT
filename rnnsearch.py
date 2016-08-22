@@ -229,7 +229,7 @@ def parseargs_train(args):
     desc = 'beam size'
     parser.add_argument('--beam-size', type = int, help = desc)
     # normalize
-    desc = 'normalize'
+    desc = 'normalize probability by the length of cadidate sentences'
     parser.add_argument('--normalize', type = bool, help = desc)
     # max length
     desc = 'max translation length'
@@ -252,7 +252,7 @@ def parseargs_decode(args):
     desc = 'beam size'
     parser.add_argument('--beam-size', default = 10, type = int, help = desc)
     # normalize
-    desc = 'normalize'
+    desc = 'normalize probability by the length of cadidate sentences'
     parser.add_argument('--normalize', action = 'store_true', help = desc)
     # max length
     desc = 'max translation length'
@@ -333,6 +333,7 @@ def override(option, args):
         isvocab = invertvoc(svocab)
         itvocab = invertvoc(tvocab)
 
+        # compatible with groundhog
         option['source_eos_id'] = len(isvocab)
         option['target_eos_id'] = len(itvocab)
 
@@ -378,13 +379,13 @@ def override(option, args):
 def print_option(option):
     isvocab = option['vocabulary'][0][1]
     itvocab = option['vocabulary'][1][1]
-    
+
     print ''
     print 'options'
 
     print 'corpus:', option['corpus']
     print 'vocab:', option['vocab']
-    # excluding <eos> symbol
+    # exclude <eos> symbol
     print 'vocabsize:', [len(isvocab) - 1, len(itvocab) - 1]
 
     print 'embdim:', option['embdim']

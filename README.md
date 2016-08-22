@@ -57,7 +57,7 @@ An implementation of RNNsearch using theano, the implementation is the same with
     --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2 \
     --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234 \
     --freq 1000 --vfreq 1500 --sfreq 50 --validate nist02.src \
-    --ref nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3\
+    --ref nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3
   ```
 ### Decoding
 ```
