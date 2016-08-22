@@ -54,10 +54,10 @@ An implementation of RNNsearch using theano, the implementation is the same with
 ```
   python rnnsearch.py train --corpus zh.processed.txt en.processed.txt \
     --vocab zh.vocab.pkl en.vocab.pkl --model nmt --embdim 620 620 \
-    --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 5 \
-    --alpha 5e-4 --norm 1.0 --batch 128 --validate nist02.src \
-    --ref nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3 --freq 1000 \
-    --vfreq 1500
+    --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2 \
+    --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234 \
+    --freq 1000 --vfreq 1500 --sfreq 50 --validate nist02.src \
+    --ref nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3\
   ```
 ### Decoding
 ```
@@ -70,5 +70,5 @@ An implementation of RNNsearch using theano, the implementation is the same with
 
 ## How to get deterministic results
 1. Add ```optimizer_excluding = cudnn``` to .theanorc
-2. Using AdvancedIncSubtensor1 op instead of AdvancedIncSubtensor1_dev20 op,
+2. Use AdvancedIncSubtensor1 op instead of AdvancedIncSubtensor1_dev20 op,
 see [here](https://github.com/Theano/Theano/issues/3029)
