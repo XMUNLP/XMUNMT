@@ -8,7 +8,7 @@ import config
 from variable import variable
 from utils import update_option, add_parameters, uniform_tensor
 
-# multilinear map
+# linear map
 # y = Wx + b or y = xW + b
 # input_size: dimension of x
 # output_size: dimension of y
@@ -39,7 +39,7 @@ class linear:
 
         transpose, initializer = opt['weight']
 
-        # multilinear
+        # linear
         if variant == 'standard':
             for i, isize in enumerate(input_size):
                 name = 'weight:' + str(i)
