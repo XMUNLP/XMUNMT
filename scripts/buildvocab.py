@@ -122,13 +122,13 @@ def parseargs():
     desc = 'limit'
     parser.add_argument('--limit', default = 0, type = int, help = desc)
     desc = 'character mode'
-    parser.add_argument('--char', action = 'store_true', help = 'desc')
+    parser.add_argument('--char', action = 'store_true', help = desc)
     desc = 'sort by alphabet'
-    parser.add_argument('--alpha', action = 'store_true', help = 'desc')
+    parser.add_argument('--alpha', action = 'store_true', help = desc)
     desc = 'add token'
     parser.add_argument('--token', type = str, help = desc)
     desc = 'compatible with groundhog'
-    parser.add_argument('--groundhog', action = 'store_true', help = 'desc')
+    parser.add_argument('--groundhog', action = 'store_true', help = desc)
 
     return parser.parse_args()
 

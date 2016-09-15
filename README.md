@@ -6,7 +6,7 @@ An implementation of RNNsearch using theano, the implementation is the same with
 
 ### Data Preprocessing
 1. Prepare training corpus
-2. Building vocabulary
+2. Build vocabulary
   * Build source vocabulary
   ```
    python preprocess.py -d vocab.zh.pkl -v 30000 -b bintext.zh.pkl -p zh.txt
