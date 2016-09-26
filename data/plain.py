@@ -4,10 +4,12 @@
 
 import numpy
 
+
 def tokenize(data):
     return data.split()
 
-def numberize(data, voc, unk = 'UNK'):
+
+def numberize(data, voc, unk="UNK"):
     newdata = []
     unkid = voc[unk]
 
@@ -17,14 +19,15 @@ def numberize(data, voc, unk = 'UNK'):
 
     return newdata
 
+
 def normalize(bat):
     blen = [len(item) for item in bat]
 
     n = len(bat)
     maxlen = numpy.max(blen)
 
-    b = numpy.zeros((maxlen, n), 'int32')
-    m = numpy.zeros((maxlen, n), 'float32')
+    b = numpy.zeros((maxlen, n), "int32")
+    m = numpy.zeros((maxlen, n), "float32")
 
     for idx, item in enumerate(bat):
         b[:blen[idx], idx] = item
@@ -32,7 +35,8 @@ def normalize(bat):
 
     return b, m
 
-def processdata(data, voc, unk = 'UNK', eos = '<eos>'):
+
+def processdata(data, voc, unk="UNK", eos="<eos>"):
     data = [tokenize(item) + [eos] for item in data]
     data = numberize(data, voc, unk)
     data, mask = normalize(data)

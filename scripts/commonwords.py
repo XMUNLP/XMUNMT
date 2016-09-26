@@ -6,12 +6,12 @@ import sys
 import cPickle
 
 def loadpkl(name):
-    fd = open(name, 'r')
+    fd = open(name, "r")
     vocab = cPickle.load(fd)
     fd.close()
     return vocab
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     voc1 = loadpkl(sys.argv[1])
     voc2 = loadpkl(sys.argv[2])
     count = 0

@@ -6,20 +6,22 @@ import numpy
 import theano
 from collections import OrderedDict
 
+
 def apply_momentum(updates, params, momentum):
     sharedvars = []
     updates = OrderedDict(updates)
 
     for param in params:
-        value = param.get_value(borrow = True)
-        var = numpy.zeros(value.shape, dtype = value.dtype)
-        velocity = theano.shared(var, broadcastable = param.broadcastable)
+        value = param.get_value(borrow=True)
+        var = numpy.zeros(value.shape, dtype=value.dtype)
+        velocity = theano.shared(var, broadcastable=param.broadcastable)
         sharedvars.append(velocity)
         x = momentum * velocity + updates[param]
         updates[velocity] = x - param
         updates[param] = x
 
     return sharedvars, updates
+
 
 def apply_nesterov_momentum(updates, params, momentum):
     sharedvars = []
@@ -28,13 +30,14 @@ def apply_nesterov_momentum(updates, params, momentum):
     for param in params:
         value = param.get_value(borrow=True)
         var = numpy.zeros(value.shape, dtype=value.dtype)
-        velocity = theano.shared(var, broadcastable = param.broadcastable)
+        velocity = theano.shared(var, broadcastable=param.broadcastable)
         sharedvars.append(velocity)
         x = momentum * velocity + updates[param] - param
         updates[velocity] = x
         updates[param] = momentum * x + updates[param]
 
     return sharedvars, updates
+
 
 def sgd_updates(params, grads, lr):
     updates = OrderedDict()
@@ -44,14 +47,15 @@ def sgd_updates(params, grads, lr):
 
     return [], updates
 
+
 def adagrad_updates(params, grads, lr, epsilon):
     sharedvars = []
     updates = OrderedDict()
 
     for param, grad in zip(params, grads):
-        value = param.get_value(borrow = True)
+        value = param.get_value(borrow=True)
         var = numpy.zeros_like(value)
-        accu = theano.shared(var, broadcastable = param.broadcastable)
+        accu = theano.shared(var, broadcastable=param.broadcastable)
         accu_new = accu + (grad ** 2)
         delta = lr * grad / theano.tensor.sqrt(accu_new + epsilon)
         sharedvars.append(accu)
@@ -60,25 +64,26 @@ def adagrad_updates(params, grads, lr, epsilon):
 
     return sharedvars, updates
 
-def rmsprop_updates(params, grads, lr, rho, epsilon, variant = 'hinton'):
+
+def rmsprop_updates(params, grads, lr, rho, epsilon, variant="hinton"):
     sharedvars = []
     updates = OrderedDict()
 
-    if variant == 'hinton':
+    if variant == "hinton":
         for param, grad in zip(params, grads):
-            value = param.get_value(borrow = True)
+            value = param.get_value(borrow=True)
             var = numpy.zeros_like(value)
-            accu = theano.shared(var, broadcastable = param.broadcastable)
+            accu = theano.shared(var, broadcastable=param.broadcastable)
             accu_new = rho * accu + (1 - rho) * grad ** 2
             delta = lr * grad / (theano.tensor.sqrt(accu_new) + epsilon)
             sharedvars.append(accu)
             updates[accu] = accu_new
             updates[param] = param - delta
-    elif variant == 'graves':
+    elif variant == "graves":
         for param, grad in zip(params, grads):
-            value = numpy.zeros_like(param.get_value(borrow = True))
-            accu = theano.shared(value, broadcastable = param.broadcastable)
-            gaccu = theano.shared(value, broadcastable = param.broadcastable)
+            value = numpy.zeros_like(param.get_value(borrow=True))
+            accu = theano.shared(value, broadcastable=param.broadcastable)
+            gaccu = theano.shared(value, broadcastable=param.broadcastable)
 
             accu_new = rho * accu + (1 - rho) * (grad ** 2)
             gaccu_new = rho * gaccu + (1 - rho) * grad
@@ -92,19 +97,20 @@ def rmsprop_updates(params, grads, lr, rho, epsilon, variant = 'hinton'):
             delta = lr * grad / denorm
             updates[param] = param - delta
     else:
-        raise RuntimeError('error: unknown variant')
+        raise RuntimeError("error: unknown variant")
 
     return sharedvars, updates
+
 
 def rmsprop_momentum_updates(params, grads, lr, rho, epsilon, momentum):
     sharedvars = []
     updates = OrderedDict()
 
     for param, grad in zip(params, grads):
-        value = numpy.zeros_like(param.get_value(borrow = True))
-        accu = theano.shared(value, broadcastable = param.broadcastable)
-        grad_accu = theano.shared(value, broadcastable = param.broadcastable)
-        velocity = theano.shared(value, broadcastable = param.broadcastable)
+        value = numpy.zeros_like(param.get_value(borrow=True))
+        accu = theano.shared(value, broadcastable=param.broadcastable)
+        grad_accu = theano.shared(value, broadcastable=param.broadcastable)
+        velocity = theano.shared(value, broadcastable=param.broadcastable)
 
         accu_new = rho * accu + (1 - rho) * (grad ** 2)
         grad_accu_new = rho * grad_accu + (1 - rho) * grad
@@ -122,15 +128,16 @@ def rmsprop_momentum_updates(params, grads, lr, rho, epsilon, momentum):
 
     return sharedvars, updates
 
+
 def adadelta_updates(params, grads, lr, rho, epsilon):
     sharedvars = []
     updates = OrderedDict()
 
     for param, grad in zip(params, grads):
-        value = param.get_value(borrow = True)
+        value = param.get_value(borrow=True)
         var = numpy.zeros_like(value)
-        accu = theano.shared(var, broadcastable = param.broadcastable)
-        delta_accu = theano.shared(var, broadcastable = param.broadcastable)
+        accu = theano.shared(var, broadcastable=param.broadcastable)
+        delta_accu = theano.shared(var, broadcastable=param.broadcastable)
 
         sharedvars.append(accu)
         sharedvars.append(delta_accu)
@@ -147,21 +154,22 @@ def adadelta_updates(params, grads, lr, rho, epsilon):
 
     return sharedvars, updates
 
+
 def adam_updates(params, grads, lr, beta1, beta2, epsilon):
     sharedvars = []
     updates = OrderedDict()
 
-    t_prev = theano.shared(numpy.asarray(0.0, dtype = theano.config.floatX))
+    t_prev = theano.shared(numpy.asarray(0.0, dtype=theano.config.floatX))
     t = t_prev + 1
     a_t = lr * theano.tensor.sqrt(1 - beta2 ** t) / (1 - beta1 ** t)
 
     sharedvars.append(t_prev)
 
     for param, g_t in zip(params, grads):
-        value = param.get_value(borrow = True)
+        value = param.get_value(borrow=True)
         var = numpy.zeros_like(value)
-        m_prev = theano.shared(var, broadcastable = param.broadcastable)
-        v_prev = theano.shared(var, broadcastable = param.broadcastable)
+        m_prev = theano.shared(var, broadcastable=param.broadcastable)
+        v_prev = theano.shared(var, broadcastable=param.broadcastable)
 
         sharedvars.append(m_prev)
         sharedvars.append(v_prev)

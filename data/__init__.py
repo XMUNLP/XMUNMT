@@ -1,4 +1,4 @@
-# __init__.py
+# data/__init__.py
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 

@@ -3,37 +3,40 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
+
 import re
 import math
 import numpy
 from collections import Counter
 
+
 # tokenization from mteval
 def tokenization(text):
     # language-independent part
-    text = text.replace('<skipped>', '')
-    text = text.replace('-\n', ' ')
-    text = text.replace('&quot;', '"')
-    text = text.replace('&amp;', '&')
-    text = text.replace('&lt;', '<')
-    text = text.replace('&gt', '>')
+    text = text.replace("<skipped>", "")
+    text = text.replace("-\n", " ")
+    text = text.replace("&quot;", "\"")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt", ">")
 
     # lowercase
     text = text.lower()
     # tokenize punctuation
-    text = re.sub('([\{-~\[-` -&\(-\+:-@/])', ' \g<1> ', text)
+    text = re.sub("([\{-~\[-` -&\(-\+:-@/])", " \g<1> ", text)
     # tokenize period and comma unless preceded by a digit
-    text = re.sub('([^0-9])([.,])', '\g<1> \g<2> ', text)
+    text = re.sub("([^0-9])([.,])", "\g<1> \g<2> ", text)
     # tokenize period and comma unless follwed by a digit
-    text = re.sub('([.,])([^0-9])', ' \g<1> \g<2>', text)
+    text = re.sub("([.,])([^0-9])", " \g<1> \g<2>", text)
     # tokenize dash when preceded by a digit
-    text = re.sub('([0-9])(-)', '\g<1> \g<2> ', text)
+    text = re.sub("([0-9])(-)", "\g<1> \g<2> ", text)
     # one space only between words
-    text = ' '.join(text.split())
+    text = " ".join(text.split())
     # no leading and trailing space
     text = text.strip()
 
     return text
+
 
 def count_ngrams(seq, n):
     counts = {}
@@ -41,12 +44,13 @@ def count_ngrams(seq, n):
 
     for i in range(length):
         if i + n <= length:
-            ngram = ' '.join(seq[i:i + n])
+            ngram = " ".join(seq[i : i + n])
             if ngram not in counts:
                 counts[ngram] = 0
             counts[ngram] += 1
 
     return counts
+
 
 def closest_length(candidate, references):
     clen = len(candidate)
@@ -65,8 +69,10 @@ def closest_length(candidate, references):
 
     return closest_len
 
+
 def shortest_length(references):
     return min([len(ref) for ref in references])
+
 
 def modified_precision(candidate, references, n):
     counts = count_ngrams(candidate, n)
@@ -89,14 +95,15 @@ def modified_precision(candidate, references, n):
 
     return float(sum(clipped_counts.values())), float(sum(counts.values()))
 
-def brevity_penalty(trans, refs, mode = 'closest'):
+
+def brevity_penalty(trans, refs, mode="closest"):
     bp_c = 0.0
     bp_r = 0.0
 
     for candidate, references in zip(trans, refs):
         bp_c += len(candidate)
 
-        if mode == 'shortest':
+        if mode == "shortest":
             bp_r += shortest_length(references)
         else:
             bp_r += closest_length(candidate, references)
@@ -108,9 +115,10 @@ def brevity_penalty(trans, refs, mode = 'closest'):
 
     return bp
 
+
 # trans: a list of tokenized sentence
 # refs: a list of list of tokenized reference sentences
-def bleu(trans, refs, bp = 'closest', n = 4, weight = None):
+def bleu(trans, refs, bp="closest", n=4, weight=None):
     p_norm = [0 for i in range(n)]
     p_denorm = [0 for i in range(n)]
 
@@ -134,18 +142,20 @@ def bleu(trans, refs, bp = 'closest', n = 4, weight = None):
 
     return bleu
 
+
 def bleu_stats(hypo, ref, k):
     yield len(hypo)
     yield len(ref)
     for n in xrange(1, k + 1):
-        sngrams = [tuple(hypo[i:i + n]) for i in xrange(len(hypo) + 1 - n)]
-        rngrams = [tuple(ref[i:i + n]) for i in xrange(len(ref) + 1 - n)]
+        sngrams = [tuple(hypo[i : i + n]) for i in xrange(len(hypo) + 1 - n)]
+        rngrams = [tuple(ref[i : i + n]) for i in xrange(len(ref) + 1 - n)]
         scounts = Counter(sngrams)
         rcounts = Counter(rngrams)
         yield sum((scounts & rcounts).values())
         yield max(len(hypo) + 1 - n, 0)
 
-def sentence_bleu(hypothesis, reference, n = 4):
+        
+def sentence_bleu(hypothesis, reference, n=4):
     stats = list(bleu_stats(hypothesis, reference, n))
     stats = numpy.atleast_2d(numpy.asarray(stats))[:, :10].sum(axis=0)
 
@@ -157,7 +167,8 @@ def sentence_bleu(hypothesis, reference, n = 4):
     log_bleu_prec = sum(vals) / float(n)
     return numpy.exp(min(0, 1 - float(r) / c) + log_bleu_prec)
 
-def smoothed_sentence_bleu(hypothesis, reference, n = 4):
+
+def smoothed_sentence_bleu(hypothesis, reference, n=4):
     stats = list(bleu_stats(hypothesis, reference, n))
     c, r = stats[:2]
 

@@ -2,60 +2,30 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-import theano
 
-from utils import merge_option
+class option(object):
 
-def linear_option():
-    opt = {}
-    opt['name'] = 'linear'
-    opt['weight'] = True
-    opt['bias'] = True
-    opt['variant'] = 'standard'
-    opt['target'] = 'auto'
+    def __init__(self, **opt):
+        self.__dict__.update(opt)
 
-    return opt
+    def __iter__(self):
+        return self.__dict__.itervalues()
 
-def embedding_option():
-    opt = {}
-    opt['name'] = 'embedding'
-    opt['bias'] = False
-    opt['init'] = None
-    opt['target'] = 'auto'
 
-    return opt
+class config(object):
 
-def feedforward_option():
-    opt = {}
-    opt['name'] = 'feedforward'
-    opt['weight'] = True
-    opt['bias'] = True
-    opt['variant'] = 'standard'
-    opt['function'] = theano.tensor.nnet.sigmoid
-    opt['target'] = 'auto'
+    def __getitem__(self, key):
+        key_list = key.split("/")
+        if len(key_list) == 1:
+            return getattr(self, key)
+        else:
+            obj = getattr(self, key_list[0])
+            return getattr(obj, "/".join(key_list[1:]))
 
-    return opt
-
-def maxout_option():
-    opt = {}
-    opt['name'] = 'maxout'
-    opt['maxpart'] = 2
-    opt['weight'] = True
-    opt['bias'] = True
-    opt['variant'] = 'standard'
-    opt['target'] = 'auto'
-
-    return opt
-
-def gru_option():
-    opt = {}
-    opt['name'] = 'gru'
-    opt['variant'] = 'standard'
-    opt['target'] = 'auto'
-    lopt = linear_option()
-    merge_option(opt, 'reset-gate', lopt)
-    merge_option(opt, 'update-gate', lopt)
-    merge_option(opt, 'transform', lopt)
-    merge_option(opt, 'gates', lopt)
-
-    return opt
+    def __setitem__(self, key, value):
+        key_list = key.split("/")
+        if len(key_list) == 1:
+            setattr(self, key, value)
+        else:
+            obj = getattr(self, key_list[0])
+            setattr(obj, "/".join(key_list[1:]), value)

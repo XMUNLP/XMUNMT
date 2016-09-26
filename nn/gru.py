@@ -3,110 +3,104 @@
 # email: playinf@stu.xmu.edu.cn
 
 import theano
-import config
 
-from feedforward import feedforward
-from utils import update_option, add_parameters
-from utils import extract_option, add_if_not_exsit
+from config import config
+from utils import get_or_default
+from variable import variable_scope
+from linear import linear, linear_config
+from feedforward import feedforward, feedforward_config
+
+
+class gru_config(config):
+    """
+    * dtype: str, default theano.config.floatX
+    * scope: str, default "gru"
+    * concat: bool, True to concat weight matrices
+    * activation: activation function, default tanh
+    * gates: feedforward_config, config behavior of gates
+    * reset_gate: feedforward_config, config behavior of reset gate
+    * update_gate: feedforward_config, config behavior of update gate
+    * candidate: linear_config, config behavior of candidate transform
+    """
+
+    def __init__(self, **kwargs):
+        self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
+        self.scope = get_or_default(kwargs, "scope", "gru")
+        self.concat = get_or_default(kwargs, "concat", False)
+        self.activation = get_or_default(kwargs, "activation",
+                                         theano.tensor.tanh)
+        self.gates = linear_config(dtype=self.dtype, scope="gates")
+        self.reset_gate = feedforward_config(dtype=self.dtype,
+                                             scope="reset_gate")
+        self.update_gate = feedforward_config(dtype=self.dtype,
+                                              scope="update_gate")
+        self.candidate = linear_config(dtype=self.dtype, scope="candidate")
+
 
 # gated recurrent unit
-# available options:
-# 1. name
-# 2. variant: 'tied-weight' or 'standard'
-# 3. update-gate/weight: only works when variant == 'standard'
-# 4. update-gate/bias: only works when variant == 'standard'
-# 5. reset-gate/weight: only works when variant == 'standard'
-# 6. reset-gate/bias: only works when variant == 'standard'
-# 7. gates/weight: only works when variant == 'tied-weight'
-# 8. gates/bias: only works when variant == 'tied-weight'
-# 9. transform/weight
-# 10. transform/bias
-# 11. target: target device, default: 'auto'
 class gru:
 
-    def __init__(self, input_size, output_size, **option):
-        # inherit option
-        if 'target' in option:
-            add_if_not_exsit(option, 'reset-gate/target', option['target'])
-            add_if_not_exsit(option, 'update-gate/target', option['target'])
-            add_if_not_exsit(option, 'transform/target', option['target'])
-            add_if_not_exsit(option, 'gates/target', option['target'])
-
-        if 'variant' in option:
-            add_if_not_exsit(option, 'reset-gate/variant', option['variant'])
-            add_if_not_exsit(option, 'update-gate/variant', option['variant'])
-            add_if_not_exsit(option, 'transform/variant', option['variant'])
-            add_if_not_exsit(option, 'gates/variant', option['variant'])
-
-        opt = config.gru_option()
-        update_option(opt, option)
-
-        variant = opt['variant']
-
-        ropt = extract_option(opt, 'reset-gate')
-        uopt = extract_option(opt, 'update-gate')
-        topt = extract_option(opt, 'transform')
-        gopt = extract_option(opt, 'gates')
-        ropt['name'] = 'reset-gate'
-        uopt['name'] = 'update-gate'
-        topt['name'] = 'transform'
-        gopt['name'] = 'gates'
-        topt['function'] = theano.tensor.tanh
-
-        modules = []
+    def __init__(self, input_size, output_size, config=gru_config()):
+        scope = config.scope
+        concat = config.concat
+        activation = config.activation
 
         if not isinstance(input_size, (list, tuple)):
             input_size = [input_size]
 
-        if variant == 'standard':
-            isize = input_size + [output_size]
-            osize = output_size
-            rgate = feedforward(isize, osize, **ropt)
-            ugate = feedforward(isize, osize, **uopt)
-            trans = feedforward(isize, osize, **topt)
-            modules.append(rgate)
-            modules.append(ugate)
-            modules.append(trans)
-        else:
-            isize = input_size + [output_size]
-            osize = output_size
-            gates = feedforward(isize, 2 * osize, **gopt)
-            trans = feedforward(isize, osize, **topt)
-            modules.append(gates)
-            modules.append(trans)
+        modules = []
 
-        name = opt['name']
+        # config scope
+        with variable_scope(scope):
+            if not concat:
+                isize = input_size + [output_size]
+                osize = output_size
+                rgate = feedforward(isize, osize, config.reset_gate)
+                ugate = feedforward(isize, osize, config.update_gate)
+                trans = linear(isize, osize, config.candidate)
+
+                modules.append(rgate)
+                modules.append(ugate)
+                modules.append(trans)
+            else:
+                isize = input_size + [output_size]
+                osize = output_size
+                gates = feedforward(isize, 2 * osize, config.gates)
+                trans = linear(isize, osize, config.candidate)
+
+                modules.append(gates)
+                modules.append(trans)
+
         params = []
 
         for m in modules:
-            add_parameters(params, name, *m.parameter)
+            params.extend(m.parameter)
 
         def forward(x, h):
             if not isinstance(x, (list, tuple)):
                 x = [x]
 
-            if variant == 'standard':
+            if not concat:
                 reset_gate = modules[0]
                 update_gate = modules[1]
                 transform = modules[2]
                 r = reset_gate(x + [h])
                 u = update_gate(x + [h])
-                t = transform(x + [r * h])
+                c = activation(transform(x + [r * h]))
             else:
                 gates = modules[0]
                 transform = modules[1]
                 r_u = gates(x + [h])
-                size1 = r_u.shape[-1] / 2
-                size2 = r_u.shape[-1] - size1
-                r, u = theano.tensor.split(r_u, (size1, size2), 2, -1)
-                t = transform(x + [r * h])
+                size = r_u.shape[-1] / 2
+                r, u = theano.tensor.split(r_u, (size, size), 2, -1)
+                c = activation(transform(x + [r * h]))
 
-            y = (1.0 - u) * h + u * t
+            y = (1.0 - u) * h + u * c
 
-            return y
+            return y, y
 
-        self.name = name
-        self.option = opt
+        self.name = scope
+        self.config = config
         self.forward = forward
         self.parameter = params
 

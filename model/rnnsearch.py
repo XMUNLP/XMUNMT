@@ -5,92 +5,104 @@
 import numpy
 import theano
 
-from utils import extract_option, update_option
-from utils import add_if_not_exsit, add_parameters
-from nn import linear, embedding, feedforward, gru, maxout
+from nn import linear, linear_config
+from nn import maxout, maxout_config
+from nn import config, variable_scope
+from nn import feedforward, feedforward_config
+from utils import get_or_default, add_if_not_exsit
+from nn import embedding, embedding_config, gru, gru_config
 
-# standard rnnsearch configuration
-def rnnsearch_config():
-    opt = {}
 
-    # embedding
-    opt['source-embedding/bias'] = True
-    opt['target-embedding/bias'] = True
+class encoder_config(config):
+    """
+    * dtype: str, default theano.config.floatX
+    * scope: str, default "encoder"
+    * forward_rnn: gru_config, config behavior of forward rnn
+    * backward_rnn: gru_config, config behavior of backward rnn
+    """
 
-    # encoder
-    opt['encoder/forward-rnn/variant'] = 'standard'
-    opt['encoder/backward-rnn/variant'] = 'standard'
-    opt['encoder/forward-rnn/reset-gate/weight'] = False
-    opt['encoder/forward-rnn/reset-gate/bias'] = False
-    opt['encoder/forward-rnn/update-gate/weight'] = False
-    opt['encoder/forward-rnn/update-gate/bias'] = False
-    opt['encoder/forward-rnn/transform/weight'] = False
-    opt['encoder/forward-rnn/transform/bias'] = True
-    opt['encoder/backward-rnn/reset-gate/weight'] = False
-    opt['encoder/backward-rnn/reset-gate/bias'] = False
-    opt['encoder/backward-rnn/update-gate/weight'] = False
-    opt['encoder/backward-rnn/update-gate/bias'] = False
-    opt['encoder/backward-rnn/transform/weight'] = False
-    opt['encoder/backward-rnn/transform/bias'] = True
+    def __init__(self, **kwargs):
+        self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
+        self.scope = get_or_default(kwargs, "scope", "encoder")
+        self.forward_rnn = gru_config(dtype=self.dtype, scope="forward_rnn")
+        self.backward_rnn = gru_config(dtype=self.dtype, scope="backward_rnn")
 
-    # decoder
-    opt['decoder/init-transform/variant'] = 'standard'
-    opt['decoder/annotation-transform/variant'] = 'standard'
-    opt['decoder/state-transform/variant'] = 'standard'
-    opt['decoder/context-transform/variant'] = 'standard'
-    opt['decoder/rnn/variant'] = 'standard'
-    opt['decoder/maxout/variant'] = 'standard'
-    opt['decoder/deepout/variant'] = 'standard'
-    opt['decoder/classify/variant'] = 'standard'
 
-    opt['decoder/init-transform/weight'] = False
-    opt['decoder/init-transform/bias'] = True
-    opt['decoder/annotation-transform/weight'] = False
-    opt['decoder/annotation-transform/bias'] = False
-    opt['decoder/state-transform/weight'] = False
-    opt['decoder/state-transform/bias'] = False
-    opt['decoder/context-transform/weight'] = False
-    opt['decoder/context-transform/bias'] = False
-    opt['decoder/rnn/reset-gate/weight'] = False
-    opt['decoder/rnn/reset-gate/bias'] = False
-    opt['decoder/rnn/update-gate/weight'] = False
-    opt['decoder/rnn/update-gate/bias'] = False
-    opt['decoder/rnn/transform/weight'] = False
-    opt['decoder/rnn/transform/bias'] = True
-    opt['decoder/maxout/weight'] = False
-    opt['decoder/maxout/bias'] = True
-    opt['decoder/deepout/weight'] = False
-    opt['decoder/deepout/bias'] = False
-    opt['decoder/classify/weight'] = False
-    opt['decoder/classify/bias'] = True
+class decoder_config(config):
+    """
+    * dtype: str, default theano.config.floatX
+    * scope: str, default "decoder"
+    * init_transform: feedforward_config, config initial state transform
+    * annotation_transform: linear_config, config annotation transform
+    * state_transform: linear_config, config state transform
+    * context_transform: linear_config, config context transform
+    * rnn: gru_config, config decoder rnn
+    * maxout: maxout_config, config maxout unit
+    * deepout: linear_config, config deepout transform
+    * classify: linear_config, config classify transform
+    """
 
-    return opt
+    def __init__(self, **kwargs):
+        self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
+        self.scope = get_or_default(kwargs, "scope", "decoder")
+        self.init_transform = feedforward_config(dtype=self.dtype,
+                                                 scope="init_transform",
+                                                 activation=theano.tensor.tanh)
+        self.annotation_transform = linear_config(dtype=self.dtype,
+                                                  scope="annotation_transform")
+        self.state_transform = linear_config(dtype=self.dtype,
+                                             scope="state_transform")
+        self.context_transform = linear_config(dtype=self.dtype,
+                                               scope="context_transform")
+        self.rnn = gru_config(dtype=self.dtype, scope="rnn")
+        self.maxout = maxout_config(dtype=self.dtype, scope="maxout")
+        self.deepout = linear_config(dtypde=self.dtype, scope="deepout")
+        self.classify = linear_config(dtype=self.dtype, scope="classify")
+
+
+class rnnsearch_config(config):
+    """
+    * dtype: str, default theano.config.floatX
+    * scope: str, default "rnnsearch"
+    * source_embedding: embedding_config, config source side embedding
+    * target_embedding: embedding_config, config target side embedding
+    * encoder: encoder_config, config encoder
+    * decoder: decoder_config, config decoder
+    """
+
+    def __init__(self, **kwargs):
+        self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
+        self.scope = get_or_default(kwargs, "scope", "rnnsearch")
+        self.source_embedding = embedding_config(dtype=self.dtype,
+                                                 scope="source_embedding")
+        self.target_embedding = embedding_config(dtype=self.dtype,
+                                                 scope="target_embedding")
+        self.encoder = encoder_config(dtype=self.dtype)
+        self.decoder = decoder_config(dtype=self.dtype)
+
 
 class encoder:
 
-    def __init__(self, input_size, hidden_size, **option):
-        opt = option
+    def __init__(self, input_size, hidden_size, config=encoder_config()):
+        scope = config.scope
 
-        fopt = extract_option(opt, 'forward-rnn')
-        bopt = extract_option(opt, 'backward-rnn')
-        fopt['name'] = 'forward-rnn'
-        bopt['name'] = 'backward-rnn'
-
-        forward_encoder = gru(input_size, hidden_size, **fopt)
-        backward_encoder = gru(input_size, hidden_size, **bopt)
+        with variable_scope(scope):
+            forward_encoder = gru(input_size, hidden_size, config.forward_rnn)
+            backward_encoder = gru(input_size, hidden_size,
+                                   config.backward_rnn)
 
         params = []
-        add_parameters(params, 'encoder', *forward_encoder.parameter)
-        add_parameters(params, 'encoder', *backward_encoder.parameter)
+        params.extend(forward_encoder.parameter)
+        params.extend(backward_encoder.parameter)
 
         def forward(x, mask, initstate):
             def forward_step(x, m, h):
-                nh = forward_encoder(x, h)
+                nh, states = forward_encoder(x, h)
                 nh = (1.0 - m[:, None]) * h + m[:, None] * nh
                 return [nh]
 
             def backward_step(x, m, h):
-                nh = backward_encoder(x, h)
+                nh, states = backward_encoder(x, h)
                 nh = (1.0 - m[:, None]) * h + m[:, None] * nh
                 return [nh]
 
@@ -103,62 +115,49 @@ class encoder:
 
             return theano.tensor.concatenate([hf, hb], 2)
 
-        self.name = 'encoder'
-        self.option = option
+        self.name = scope
+        self.config = config
         self.forward = forward
         self.parameter = params
 
     def __call__(self, x, mask, initstate):
         return self.forward(x, mask, initstate)
 
+
 class decoder:
 
     def __init__(self, emb_size, shidden_size, thidden_size, ahidden_size,
-                 mhidden_size, maxpart, dhidden_size, voc_size, **option):
-        opt = option
+                 mhidden_size, maxpart, dhidden_size, voc_size,
+                 config=decoder_config()):
+        scope = config.scope
         ctx_size = 2 * shidden_size
 
-        iopt = extract_option(opt, 'init-transform')
-        aopt = extract_option(opt, 'annotation-transform')
-        sopt = extract_option(opt, 'state-transform')
-        topt = extract_option(opt, 'context-transform')
-        ropt = extract_option(opt, 'rnn')
-        mopt = extract_option(opt, 'maxout')
-        dopt = extract_option(opt, 'deepout')
-        copt = extract_option(opt, 'classify')
-
-        iopt['name'] = 'init-transform'
-        aopt['name'] = 'annotation-transform'
-        sopt['name'] = 'state-transform'
-        topt['name'] = 'context-transform'
-        ropt['name'] = 'rnn'
-        mopt['name'] = 'maxout'
-        dopt['name'] = 'deepout'
-        copt['name'] = 'classify'
-        iopt['function'] = theano.tensor.tanh
-        mopt['maxpart'] = maxpart
-
-        init_transform = feedforward(shidden_size, thidden_size, **iopt)
-        # attention
-        annotation_transform = linear(ctx_size, ahidden_size, **aopt)
-        state_transform = linear(thidden_size, ahidden_size, **sopt)
-        context_transform = linear(ahidden_size, 1, **topt)
-        # decoder rnn
-        rnn = gru([emb_size, ctx_size], thidden_size, **ropt)
-        maxout_transform = maxout([thidden_size, emb_size, ctx_size],
-                                  mhidden_size, **mopt)
-        deepout_transform = linear(mhidden_size, dhidden_size, **dopt)
-        classify_transform = linear(dhidden_size, voc_size, **copt)
+        with variable_scope(scope):
+            init_transform = feedforward(shidden_size, thidden_size,
+                                         config.init_transform)
+            annotation_transform = linear(ctx_size, ahidden_size,
+                                          config.annotation_transform)
+            state_transform = linear(thidden_size, ahidden_size,
+                                     config.state_transform)
+            context_transform = linear(ahidden_size, 1,
+                                       config.context_transform)
+            rnn = gru([emb_size, ctx_size], thidden_size, config.rnn)
+            maxout_transform = maxout([thidden_size, emb_size, ctx_size],
+                                      mhidden_size, maxpart, config.maxout)
+            deepout_transform = linear(mhidden_size, dhidden_size,
+                                       config.deepout)
+            classify_transform = linear(dhidden_size, voc_size,
+                                        config.classify)
 
         params = []
-        add_parameters(params, 'decoder', *init_transform.parameter)
-        add_parameters(params, 'decoder', *annotation_transform.parameter)
-        add_parameters(params, 'decoder', *state_transform.parameter)
-        add_parameters(params, 'decoder', *context_transform.parameter)
-        add_parameters(params, 'decoder', *rnn.parameter)
-        add_parameters(params, 'decoder', *maxout_transform.parameter)
-        add_parameters(params, 'decoder', *deepout_transform.parameter)
-        add_parameters(params, 'decoder', *classify_transform.parameter)
+        params.extend(init_transform.parameter)
+        params.extend(annotation_transform.parameter)
+        params.extend(state_transform.parameter)
+        params.extend(context_transform.parameter)
+        params.extend(rnn.parameter)
+        params.extend(maxout_transform.parameter)
+        params.extend(deepout_transform.parameter)
+        params.extend(classify_transform.parameter)
 
         def attention(state, xmask, mapped_annotation):
             mapped_state = state_transform(state)
@@ -192,7 +191,7 @@ class decoder:
             return prob
 
         def compute_state(yemb, ymask, state, context):
-            new_state = rnn([yemb, context], state)
+            _, new_state = rnn([yemb, context], state)
             ymask = ymask[:, None]
             new_state = (1.0 - ymask) * state + ymask * new_state
 
@@ -227,8 +226,8 @@ class decoder:
 
             return prob
 
-        self.name = 'decoder'
-        self.option = opt
+        self.name = scope
+        self.config = config
         self.forward = forward
         self.parameter = params
         self.compute_initstate = compute_initstate
@@ -239,41 +238,37 @@ class decoder:
     def __call__(self, yseq, xmask, ymask, annotation):
         return self.forward(yseq, xmask, ymask, annotation)
 
+
 class rnnsearch:
 
-    def __init__(self, **option):
-        opt = rnnsearch_config()
+    def __init__(self, config=rnnsearch_config(), **option):
+        scope = config.scope
 
-        update_option(opt, option)
-        sedim, tedim = option['embdim']
-        shdim, thdim, ahdim = option['hidden']
-        maxdim = option['maxhid']
-        deephid = option['deephid']
-        k = option['maxpart']
-        svocab, tvocab = option['vocabulary']
+        sedim, tedim = option["embdim"]
+        shdim, thdim, ahdim = option["hidden"]
+        maxdim = option["maxhid"]
+        deephid = option["deephid"]
+        k = option["maxpart"]
+        svocab, tvocab = option["vocabulary"]
         sw2id, sid2w = svocab
         tw2id, tid2w = tvocab
         svsize = len(sid2w)
         tvsize = len(tid2w)
 
-        sopt = extract_option(opt, 'source-embedding')
-        topt = extract_option(opt, 'target-embedding')
-        eopt = extract_option(opt, 'encoder')
-        dopt = extract_option(opt, 'decoder')
-        sopt['name'] = 'source-embedding'
-        topt['name'] = 'target-embedding'
-
-        source_embedding = embedding(svsize, sedim, **sopt)
-        target_embedding = embedding(tvsize, tedim, **topt)
-        rnn_encoder = encoder(sedim, shdim, **eopt)
-        rnn_decoder = decoder(tedim, shdim, thdim, ahdim, maxdim, k, deephid,
-                              tvsize, **dopt)
+        with variable_scope(scope):
+            source_embedding = embedding(svsize, sedim,
+                                         config.source_embedding)
+            target_embedding = embedding(tvsize, tedim,
+                                         config.target_embedding)
+            rnn_encoder = encoder(sedim, shdim, config.encoder)
+            rnn_decoder = decoder(tedim, shdim, thdim, ahdim, maxdim, k,
+                                  deephid, tvsize, config.decoder)
 
         params = []
-        add_parameters(params, 'rnnsearch', *source_embedding.parameter)
-        add_parameters(params, 'rnnsearch', *target_embedding.parameter)
-        add_parameters(params, 'rnnsearch', *rnn_encoder.parameter)
-        add_parameters(params, 'rnnsearch', *rnn_decoder.parameter)
+        params.extend(source_embedding.parameter)
+        params.extend(target_embedding.parameter)
+        params.extend(rnn_encoder.parameter)
+        params.extend(rnn_decoder.parameter)
 
         def build_training():
             xseq = theano.tensor.imatrix()
@@ -365,20 +360,23 @@ class rnnsearch:
         train_inputs, train_outputs = build_training()
         functions = build_sampling()
 
+        self.name = scope
+        self.config = config
+        self.parameter = params
+        self.option = option
         self.cost = train_outputs[0]
         self.inputs = train_inputs
         self.outputs = train_outputs
         self.updates = []
-        self.parameter = params
         self.sample = functions
-        self.option = opt
 
-# based on groundhog's impelmentation
+
+# based on groundhog"s impelmentation
 def beamsearch(model, xseq, **option):
-    add_if_not_exsit(option, 'beamsize', 10)
-    add_if_not_exsit(option, 'normalize', False)
-    add_if_not_exsit(option, 'maxlen', None)
-    add_if_not_exsit(option, 'minlen', None)
+    add_if_not_exsit(option, "beamsize", 10)
+    add_if_not_exsit(option, "normalize", False)
+    add_if_not_exsit(option, "maxlen", None)
+    add_if_not_exsit(option, "minlen", None)
 
     functions = model.sample
 
@@ -388,15 +386,15 @@ def beamsearch(model, xseq, **option):
     compute_probs = functions[3]
     compute_state = functions[4]
 
-    vocabulary = model.option['vocabulary']
-    eos = model.option['eos']
+    vocabulary = model.option["vocabulary"]
+    eos = model.option["eos"]
     vocab = vocabulary[1][1]
     eosid = vocabulary[1][0][eos]
 
-    size = option['beamsize']
-    maxlen = option['maxlen']
-    minlen = option['minlen']
-    normalize = option['normalize']
+    size = option["beamsize"]
+    maxlen = option["maxlen"]
+    minlen = option["minlen"]
+    normalize = option["normalize"]
 
     if maxlen == None:
         maxlen = len(xseq) * 3
@@ -404,7 +402,7 @@ def beamsearch(model, xseq, **option):
     if minlen == None:
         minlen = len(xseq) / 2
 
-    xmask = numpy.ones(xseq.shape, 'float32')
+    xmask = numpy.ones(xseq.shape, "float32")
     annot = encode(xseq, xmask)
     state, mannot = compute_istate(annot)
 
@@ -425,9 +423,9 @@ def beamsearch(model, xseq, **option):
 
         if k > 0:
             last_words = numpy.array(map(lambda t: t[-1], trans))
-            last_words = last_words.astype('int32')
+            last_words = last_words.astype("int32")
         else:
-            last_words = numpy.zeros(num, 'int32')
+            last_words = numpy.zeros(num, "int32")
 
         xmasks = numpy.repeat(xmask, num, 1)
         annots = numpy.repeat(annot, num, 1)
@@ -458,9 +456,9 @@ def beamsearch(model, xseq, **option):
 
         newtrans = [[]] * size
         newcosts = numpy.zeros(size)
-        newstates = numpy.zeros((size, hdim), 'float32')
-        newcontexts = numpy.zeros((size, cdim), 'float32')
-        inputs = numpy.zeros(size, 'int32')
+        newstates = numpy.zeros((size, hdim), "float32")
+        newcontexts = numpy.zeros((size, cdim), "float32")
+        inputs = numpy.zeros(size, "int32")
 
         for i, (idx, nword, ncost) in enumerate(zip(tinds, winds, costs)):
             newtrans[i] = trans[idx] + [nword]
@@ -469,7 +467,7 @@ def beamsearch(model, xseq, **option):
             newcontexts[i] = contexts[idx]
             inputs[i] = nword
 
-        ymask = numpy.ones((size,), 'float32')
+        ymask = numpy.ones((size,), "float32")
         newstates = compute_state(inputs, ymask, newstates, newcontexts)
 
         trans = []

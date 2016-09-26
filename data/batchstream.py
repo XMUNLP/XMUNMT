@@ -2,13 +2,14 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
+
 class batchstream:
 
-    def __init__(self, name, batch_size = 1):
+    def __init__(self, name, batch_size=1):
         if type(name) != list:
             name = [name]
 
-        stream = [open(item, 'r') for item in name]
+        stream = [open(item, "r") for item in name]
 
         self.filename = name
         self.stream = stream
@@ -36,7 +37,7 @@ class batchstream:
 
                 for i in xrange(len(line)):
                     s = line[i]
-                    if s == '':
+                    if s == "":
                         raise IOError
                     data[i].append(s.strip())
 

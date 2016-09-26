@@ -5,15 +5,18 @@
 import numpy
 import theano
 
-def grad_norm(grad):
+
+def global_norm(grad):
     norm = theano.tensor.sqrt(sum(theano.tensor.sum(g ** 2) for g in grad))
     return norm
 
-def grad_clip(grad, lower, upper):
+
+def clip_by_value(grad, lower, upper):
     return [theano.tensor.clip(x, lower, upper) for x in grad]
 
-def grad_renormalize(grad, threshold, epsilon = 1e-7):
-    norm = grad_norm(grad)
+
+def clip_by_global_norm(grad, threshold, epsilon = 1e-7):
+    norm = global_norm(grad)
     dtype = numpy.dtype(theano.config.floatX).type
     target_norm = theano.tensor.clip(norm, 0, dtype(threshold))
     multiplier = target_norm / (dtype(epsilon) + norm)

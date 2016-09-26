@@ -8,10 +8,10 @@ import cPickle
 from collections import Counter
 
 def processline(line):
-    return line.strip().split(' ')
+    return line.strip().split(" ")
 
 def countword(name):
-    fd = open(name, 'r')
+    fd = open(name, "r")
     vocab = {}
 
     for line in fd:
@@ -24,15 +24,15 @@ def countword(name):
     return vocab
 
 def countchar(name):
-    fd = open(name, 'r')
+    fd = open(name, "r")
     vocab = {}
 
     for line in fd:
         wordlist = processline(line)
         for word in wordlist:
-            word = word.decode('utf-8')
+            word = word.decode("utf-8")
             for char in word:
-                char = char.encode('utf-8')
+                char = char.encode("utf-8")
                 vocab[char] = 1 if word not in vocab else vocab[char] + 1
 
     fd.close()
@@ -54,12 +54,12 @@ def save(name, voc):
     for i, v in enumerate(voc):
         newvoc[v] = i
 
-    fd = open(name, 'w')
+    fd = open(name, "w")
     cPickle.dump(newvoc, fd)
     fd.close()
 
 def parsetokens(s):
-    tlist = s.split(';')
+    tlist = s.split(";")
     return tlist
 
 def removespecial(vocab, tokens):
@@ -87,7 +87,7 @@ def coverage(voc, counts):
 
     return float(n) / float(total)
 
-def create_dictionary(name, lim = 0):
+def create_dictionary(name, lim=0):
     global_counter = Counter()
     fd = open(name)
 
@@ -104,7 +104,7 @@ def create_dictionary(name, lim = 0):
     total_counts = sum(combined_counter.values())
     print 100.0 * sum([count for word, count in vocab_count]) / total_counts
 
-    vocab = {'UNK': 1, '<s>': 0, '</s>': 0}
+    vocab = {"UNK": 1, "<s>": 0, "</s>": 0}
 
     for i, (word, count) in enumerate(vocab_count):
         vocab[word] = i + 2
@@ -112,23 +112,23 @@ def create_dictionary(name, lim = 0):
     return vocab
 
 def parseargs():
-    desc = 'build vocabulary'
+    desc = "build vocabulary"
     parser = argparse.ArgumentParser(description = desc)
 
-    desc = 'corpus'
-    parser.add_argument('--corpus', required = True, help = desc)
-    desc = 'output'
-    parser.add_argument('--output', required = True, help = desc)
-    desc = 'limit'
-    parser.add_argument('--limit', default = 0, type = int, help = desc)
-    desc = 'character mode'
-    parser.add_argument('--char', action = 'store_true', help = desc)
-    desc = 'sort by alphabet'
-    parser.add_argument('--alpha', action = 'store_true', help = desc)
-    desc = 'add token'
-    parser.add_argument('--token', type = str, help = desc)
-    desc = 'compatible with groundhog'
-    parser.add_argument('--groundhog', action = 'store_true', help = desc)
+    desc = "corpus"
+    parser.add_argument("--corpus", required = True, help = desc)
+    desc = "output"
+    parser.add_argument("--output", required = True, help = desc)
+    desc = "limit"
+    parser.add_argument("--limit", default = 0, type = int, help = desc)
+    desc = "character mode"
+    parser.add_argument("--char", action = "store_true", help = desc)
+    desc = "sort by alphabet"
+    parser.add_argument("--alpha", action = "store_true", help = desc)
+    desc = "add token"
+    parser.add_argument("--token", type = str, help = desc)
+    desc = "compatible with groundhog"
+    parser.add_argument("--groundhog", action = "store_true", help = desc)
 
     return parser.parse_args()
 
@@ -149,7 +149,7 @@ def buildvocab(args):
 
     if args.limit != 0:
         vocab = vocab[:args.limit]
-        print 'coverage: ', coverage(vocab, counts) * 100, '%'
+        print "coverage: ", coverage(vocab, counts) * 100, "%"
 
     if args.alpha:
         n = len(tokens)
@@ -157,12 +157,12 @@ def buildvocab(args):
 
     save(args.output, vocab)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parseargs()
 
     if args.groundhog:
         vocab = create_dictionary(args.corpus, args.limit)
-        fd = open(args.output, 'w')
+        fd = open(args.output, "w")
         cPickle.dump(vocab, fd)
         fd.close()
     else:
