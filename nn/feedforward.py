@@ -16,6 +16,8 @@ class feedforward_config(config):
     * scope: str, default "linear"
     * activation: function, activation function, default sigmoid
     * concat: bool, True to concate weights, False to use seperate weights
+    * multibias: bool, True to use bias per input, only works when
+    *            concat = False
     * bias: config.option, set bias.use=True to use bias, set bias.initializer
             to set initializer
     * weight: config.option, output_major=True to change weigth matrix
@@ -29,6 +31,7 @@ class feedforward_config(config):
         self.activation = get_or_default(kwargs, "activation",
                                          theano.tensor.nnet.sigmoid)
         self.concat = get_or_default(kwargs, "concat", False)
+        self.multibias = get_or_default(kwargs, "multibias", False)
         self.bias = option(use=True, initializer=zeros_initializer)
         self.weight = option(output_major=False,
                              initializer=uniform_initializer)

@@ -16,6 +16,8 @@ class maxout_config(config):
     * scope: str, default "linear"
     * maxpart: int, maxpart number, default 2
     * concat: bool, True to concate weights, False to use seperate weights
+    * multibias: bool, True to use bias per input, only works when
+    *            concat = False
     * bias: config.option, set bias.use=True to use bias, set bias.initializer
             to set initializer
     * weight: config.option, output_major=True to change weigth matrix
@@ -27,6 +29,7 @@ class maxout_config(config):
         self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
         self.scope = get_or_default(kwargs, "scope", "maxout")
         self.concat = get_or_default(kwargs, "concat", False)
+        self.multibias = get_or_default(kwargs, "multibias", False)
         self.bias = option(use=True, initializer=zeros_initializer)
         self.weight = option(output_major=False,
                              initializer=uniform_initializer)

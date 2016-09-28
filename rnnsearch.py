@@ -23,6 +23,7 @@ def get_config():
     # embedding
     config.source_embedding.bias.use = True
     config.target_embedding.bias.use = True
+
     # encoder
     config.encoder.forward_rnn.concat = False
     config.encoder.forward_rnn.reset_gate.bias.use = False
@@ -60,9 +61,6 @@ def get_config():
     config.decoder.rnn.update_gate.weight.output_major = False
     config.decoder.rnn.candidate.bias.use = True
     config.decoder.rnn.candidate.weight.output_major = False
-    config.decoder.context_transform.concat = False
-    config.decoder.context_transform.bias.use = False
-    config.decoder.context_transform.weight.output_major = False
     config.decoder.maxout.concat = False
     config.decoder.maxout.bias.use = True
     config.decoder.maxout.weight.output_major = False
@@ -556,8 +554,8 @@ def train(args):
     for i in range(epoch, maxepoch):
         totcost = 0.0
         for data in stream:
-            xdata, xmask = processdata(data[0], svocab)
-            ydata, ymask = processdata(data[1], tvocab)
+            xdata, xmask = processdata(data[0], svocab, eos=option["eos"])
+            ydata, ymask = processdata(data[1], tvocab, eos=option["eos"])
 
             t1 = time.time()
             cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
@@ -623,7 +621,7 @@ def train(args):
         print "--------------------------------------------------"
 
         # early stopping
-        if i >= option["stop"]:
+        if i + 1 >= option["stop"]:
             alpha = alpha * option["decay"]
 
         stream.reset()
@@ -668,7 +666,7 @@ def decode(args):
             break
 
         data = [line]
-        seq, mask = processdata(data, svocab)
+        seq, mask = processdata(data, svocab, eos=option["eos"])
         t1 = time.time()
         tlist = beamsearch(model, seq, **option)
         t2 = time.time()

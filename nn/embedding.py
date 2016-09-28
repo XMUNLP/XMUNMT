@@ -59,7 +59,7 @@ class embedding:
         def forward(indices):
             values = embedding_lookup(emb, indices)
 
-            if not bias:
+            if not use_bias:
                 return values
             else:
                 return values + bias

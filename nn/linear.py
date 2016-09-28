@@ -15,6 +15,8 @@ class linear_config(config):
     * dtype: str, default theano.config.floatX
     * scope: str, default "linear"
     * concat: bool, True to concate weights, False to use seperate weights
+    * multibias: bool, True to use bias per input, only works when
+    *            concat = False
     * bias: config.option, set bias.use=True to use bias, set bias.initializer
             to set initializer
     * weight: config.option, output_major=True to change weigth matrix
@@ -26,6 +28,7 @@ class linear_config(config):
         self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
         self.scope = get_or_default(kwargs, "scope", "linear")
         self.concat = get_or_default(kwargs, "concat", False)
+        self.multibias = get_or_default(kwargs, "multibias", False)
         self.bias = option(use=True, initializer=zeros_initializer)
         self.weight = option(output_major=False,
                              initializer=uniform_initializer)
@@ -40,6 +43,7 @@ class linear:
         dtype = config.dtype
         scope = config.scope
         concat = config.concat
+        multibias = config.multibias
         use_bias, b_initializer = tuple(config.bias)
         output_major, w_initializer = tuple(config.weight)
 
@@ -48,6 +52,7 @@ class linear:
 
         params = []
         weights = []
+        biases = []
 
         with variable_scope(scope):
             if concat:
@@ -73,8 +78,16 @@ class linear:
                     weights.append(weight)
 
             if use_bias:
-                bias = variable("bias", [output_size], b_initializer, dtype)
-                params.append(bias)
+                shape = [output_size]
+                if not concat and multibias:
+                    for i in range(len(input_size)):
+                        bias = variable("bias", shape, b_initializer, dtype)
+                        params.append(bias)
+                        biases.append(bias)
+                else:
+                    bias = variable("bias", shape, b_initializer, dtype)
+                    params.append(bias)
+                    biases.append(bias)
 
         def forward(x):
             if not isinstance(x, (list, tuple)):
@@ -84,9 +97,10 @@ class linear:
                 raise RuntimeError("unmatched inputs and weights")
 
             outs = []
+            n = len(x)
 
             if concat:
-                if len(x) == 1:
+                if n == 1:
                     x = x[0]
                 else:
                     x = theano.tensor.concatenate(x, -1)
@@ -95,15 +109,21 @@ class linear:
                     outs.append(theano.dot(x, weight[0].transpose()))
                 else:
                     outs.append(theano.dot(x, weight[0]))
-            else:
-                for v, w in zip(x, weights):
-                    if output_major:
-                        outs.append(theano.dot(v, w.transpose()))
-                    else:
-                        outs.append(theano.dot(v, w))
 
-            if use_bias:
-                outs.append(bias)
+                if use_bias:
+                    outs.append(biases[0])
+            else:
+                for i in range(n):
+                    if output_major:
+                        outs.append(theano.dot(x[i], weights[i].transpose()))
+                    else:
+                        outs.append(theano.dot(x[i], weights[i]))
+
+                    if use_bias and multibias:
+                        outs.append(biases[i])
+
+                if use_bias and not multibias:
+                    outs.append(biases[0])
 
             y = reduce(theano.tensor.add, outs)
 

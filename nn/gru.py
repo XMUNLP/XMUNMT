@@ -29,7 +29,7 @@ class gru_config(config):
         self.concat = get_or_default(kwargs, "concat", False)
         self.activation = get_or_default(kwargs, "activation",
                                          theano.tensor.tanh)
-        self.gates = linear_config(dtype=self.dtype, scope="gates")
+        self.gates = feedforward_config(dtype=self.dtype, scope="gates")
         self.reset_gate = feedforward_config(dtype=self.dtype,
                                              scope="reset_gate")
         self.update_gate = feedforward_config(dtype=self.dtype,
