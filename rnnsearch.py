@@ -6,9 +6,10 @@ import os
 import sys
 import math
 import time
-import numpy
 import cPickle
 import argparse
+
+import numpy as np
 
 from metric import bleu
 from optimizer import optimizer
@@ -69,7 +70,7 @@ def uniform(params, lower, upper, dtype="float32"):
 
     for p in params:
         s = p.get_value().shape
-        v = numpy.random.uniform(lower, upper, s).astype(dtype)
+        v = np.random.uniform(lower, upper, s).astype(dtype)
         p.set_value(v)
 
 
@@ -495,7 +496,7 @@ def train(args):
     print_option(option)
 
     # set seed
-    numpy.random.seed(option["seed"])
+    np.random.seed(option["seed"])
 
     if option["ref"]:
         references = loadreferences(option["ref"])
@@ -595,7 +596,7 @@ def train(args):
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
-                ind = numpy.random.randint(0, batch)
+                ind = np.random.randint(0, batch)
                 sdata = data[0][ind]
                 tdata = data[1][ind]
                 xdata = xdata[:, ind:ind + 1]

@@ -8,18 +8,18 @@ An implementation of RNNsearch using theano, the implementation is the same with
 1. Build vocabulary
   * Build source vocabulary
   ```
-   python buildvocab.py --corpus zh.txt --output vocab.zh.pkl --limit 30000 \
-                        --groundhog
+  python buildvocab.py --corpus zh.txt --output vocab.zh.pkl --limit 30000 \
+                       --groundhog
   ```
   * Build target vocabulary
   ```
-   python buildvocab.py --corpus en.txt --output vocab.en.pkl --limit 30000 \
-                        --groundhog
+  python buildvocab.py --corpus en.txt --output vocab.en.pkl --limit 30000 \
+                       --groundhog
   ```
 2. Shuffle corpus (Optional)
-  ```
-  python shuffle.py --corpus zh.txt en.txt
-  ```
+```
+python shuffle.py --corpus zh.txt en.txt
+```
 
 ### Training
 ```
