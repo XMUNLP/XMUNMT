@@ -12,7 +12,7 @@ import argparse
 
 from metric import bleu
 from optimizer import optimizer
-from data import batchstream, processdata
+from data import textreader, textiterator, processdata, getlen
 from model.rnnsearch import rnnsearch, rnnsearch_config, beamsearch
 
 
@@ -20,56 +20,32 @@ from model.rnnsearch import rnnsearch, rnnsearch_config, beamsearch
 def get_config():
     config = rnnsearch_config()
 
+    config["*/concat"] = False
+    config["*/output_major"] = False
+
     # embedding
-    config.source_embedding.bias.use = True
-    config.target_embedding.bias.use = True
+    config["source_embedding/bias/use"] = True
+    config["target_embedding/bias/use"] = True
 
     # encoder
-    config.encoder.forward_rnn.concat = False
-    config.encoder.forward_rnn.reset_gate.bias.use = False
-    config.encoder.forward_rnn.reset_gate.weight.output_major = False
-    config.encoder.forward_rnn.update_gate.bias.use = False
-    config.encoder.forward_rnn.update_gate.weight.output_major = False
-    config.encoder.forward_rnn.candidate.bias.use = True
-    config.encoder.forward_rnn.candidate.weight.output_major = False
-    config.encoder.backward_rnn.concat = False
-    config.encoder.backward_rnn.reset_gate.bias.use = False
-    config.encoder.backward_rnn.reset_gate.weight.output_major = False
-    config.encoder.backward_rnn.update_gate.bias.use = False
-    config.encoder.backward_rnn.update_gate.weight.output_major = False
-    config.encoder.backward_rnn.candidate.bias.use = True
-    config.encoder.backward_rnn.candidate.weight.output_major = False
+    config["encoder/forward_rnn/reset_gate/bias/use"] = False
+    config["encoder/forward_rnn/update_gate/bias/use"] = False
+    config["encoder/forward_rnn/candidate/bias/use"] = True
+    config["encoder/backward_rnn/reset_gate/bias/use"] = False
+    config["encoder/backward_rnn/update_gate/bias/use"] = False
+    config["encoder/backward_rnn/candidate/bias/use"] = True
 
     # decoder
-    config.decoder.init_transform.concat = False
-    config.decoder.init_transform.bias.use = True
-    config.decoder.init_transform.weight.output_major = False
-    config.decoder.annotation_transform.concat = False
-    config.decoder.annotation_transform.bias.use = False
-    config.decoder.annotation_transform.weight.output_major = False
-    config.decoder.state_transform.concat = False
-    config.decoder.state_transform.bias.use = False
-    config.decoder.state_transform.weight.output_major = False
-    config.decoder.context_transform.concat = False
-    config.decoder.context_transform.bias.use = False
-    config.decoder.context_transform.weight.output_major = False
-    config.decoder.rnn.reset_gate.concat = False
-    config.decoder.rnn.reset_gate.bias.use = False
-    config.decoder.rnn.reset_gate.weight.output_major = False
-    config.decoder.rnn.update_gate.bias.use = False
-    config.decoder.rnn.update_gate.bias.use = False
-    config.decoder.rnn.update_gate.weight.output_major = False
-    config.decoder.rnn.candidate.bias.use = True
-    config.decoder.rnn.candidate.weight.output_major = False
-    config.decoder.maxout.concat = False
-    config.decoder.maxout.bias.use = True
-    config.decoder.maxout.weight.output_major = False
-    config.decoder.deepout.concat = False
-    config.decoder.deepout.bias.use = False
-    config.decoder.deepout.weight.output_major = False
-    config.decoder.classify.concat = False
-    config.decoder.classify.bias.use = True
-    config.decoder.classify.weight.output_major = False
+    config["decoder/init_transform/bias/use"] = True
+    config["decoder/annotation_transform/bias/use"] = False
+    config["decoder/state_transform/bias/use"] = False
+    config["decoder/context_transform/bias/use"] = False
+    config["decoder/rnn/reset_gate/bias/use"] = False
+    config["decoder/rnn/update_gate/bias/use"] = False
+    config["decoder/rnn/candidate/bias/use"] = True
+    config["decoder/maxout/bias/use"] = True
+    config["decoder/deepout/bias/use"] = False
+    config["decoder/classify/bias/use"] = True
 
     return config
 
@@ -136,7 +112,8 @@ def set_variables(params, values):
 
 def loadreferences(names, case=True):
     references = []
-    stream = batchstream(names)
+    reader = textreader(names)
+    stream = textiterator(reader, size=[1, 1])
 
     for data in stream:
         newdata= []
@@ -161,14 +138,15 @@ def validate(scorpus, tcorpus, model, batch):
     if not scorpus or not tcorpus:
         return None
 
-    stream = batchstream([scorpus, tcorpus], batch)
+    reader = textreader([scorpus, tcorpus])
+    stream = textiterator(reader, [batch, batch])
     svocabs, tvocabs = model.vocabulary
     totcost = 0.0
     count = 0
 
     for data in stream:
-        xdata, xmask = processdata(data[0], svocabs[0])
-        ydata, ymask = processdata(data[1], tvocabs[0])
+        xdata, xmask = processdata(data[0], svocabs[0], model.option["eos"])
+        ydata, ymask = processdata(data[1], tvocabs[0], model.option["eos"])
         cost = model.compute(xdata, xmask, ydata, ymask)
         cost = cost[0]
         cost = cost * ymask.shape[1] / ymask.sum()
@@ -189,7 +167,7 @@ def translate(model, corpus, **opt):
 
     for line in fd:
         line = line.strip()
-        data, mask = processdata([line], svocab)
+        data, mask = processdata([line], svocab, eos=model.option["eos"])
         hls = beamsearch(model, data, **opt)
         if len(hls) > 0:
             best, score = hls[0]
@@ -203,120 +181,129 @@ def translate(model, corpus, **opt):
 
 
 def parseargs_train(args):
-    desc = "training rnnsearch"
+    msg = "training rnnsearch"
     usage = "rnnsearch.py train [<args>] [-h | --help]"
-    parser = argparse.ArgumentParser(description = desc, usage = usage)
+    parser = argparse.ArgumentParser(description = msg, usage = usage)
 
     # training corpus
-    desc = "source and target corpus"
-    parser.add_argument("--corpus", nargs = 2, help = desc)
+    msg = "source and target corpus"
+    parser.add_argument("--corpus", nargs=2, help=msg)
     # training vocabulary
-    desc = "source and target vocabulary"
-    parser.add_argument("--vocab", nargs = 2, help = desc)
+    msg = "source and target vocabulary"
+    parser.add_argument("--vocab", nargs=2, help=msg)
     # output model
-    desc = "model name to save or saved model to initalize, required"
-    parser.add_argument("--model", required = True, help = desc)
+    msg = "model name to save or saved model to initalize, required"
+    parser.add_argument("--model", required=True, help=msg)
 
     # embedding size
-    desc = "source and target embedding size, default 620"
-    parser.add_argument("--embdim", nargs = 2, type = int, help = desc)
+    msg = "source and target embedding size, default 620"
+    parser.add_argument("--embdim", nargs=2, type=int, help=msg)
     # hidden size
-    desc = "source, target and alignment hidden size, default 1000"
-    parser.add_argument("--hidden", nargs = 3, type = int, help = desc)
+    msg = "source, target and alignment hidden size, default 1000"
+    parser.add_argument("--hidden", nargs=3, type=int, help=msg)
     # maxout dim
-    desc = "maxout hidden dimension, default 500"
-    parser.add_argument("--maxhid", type = int, help = desc)
+    msg = "maxout hidden dimension, default 500"
+    parser.add_argument("--maxhid", type=int, help=msg)
     # maxout number
-    desc = "maxout number, default 2"
-    parser.add_argument("--maxpart", default = 2, type = int, help = desc)
+    msg = "maxout number, default 2"
+    parser.add_argument("--maxpart", default=2, type=int, help=msg)
     # deepout dim
-    desc = "deepout hidden dimension, default 620"
-    parser.add_argument("--deephid", type = int, help = desc)
+    msg = "deepout hidden dimension, default 620"
+    parser.add_argument("--deephid", type=int, help=msg)
 
     # epoch
-    desc = "maximum training epoch, default 5"
-    parser.add_argument("--maxepoch", type = int, help = desc)
+    msg = "maximum training epoch, default 5"
+    parser.add_argument("--maxepoch", type=int, help=msg)
     # learning rate
-    desc = "learning rate, default 5e-4"
-    parser.add_argument("--alpha", type = float, help = desc)
+    msg = "learning rate, default 5e-4"
+    parser.add_argument("--alpha", type=float, help=msg)
     # momentum
-    desc = "momentum, default 0.0"
-    parser.add_argument("--momentum", type = float, help = desc)
+    msg = "momentum, default 0.0"
+    parser.add_argument("--momentum", type=float, help=msg)
     # batch
-    desc = "batch size, default 128"
-    parser.add_argument("--batch", type = int, help = desc)
+    msg = "batch size, default 128"
+    parser.add_argument("--batch", type=int, help=msg)
     # training algorhtm
-    desc = "optimizer, default rmsprop"
-    parser.add_argument("--optimizer", type = str, help = desc)
+    msg = "optimizer, default rmsprop"
+    parser.add_argument("--optimizer", type=str, help=msg)
     # gradient renormalization
-    desc = "gradient renormalization, default 1.0"
-    parser.add_argument("--norm", type = float, help = desc)
+    msg = "gradient renormalization, default 1.0"
+    parser.add_argument("--norm", type=float, help=msg)
     # early stopping
-    desc = "early stopping iteration, default 0"
-    parser.add_argument("--stop", type = int, help = desc)
+    msg = "early stopping iteration, default 0"
+    parser.add_argument("--stop", type=int, help=msg)
     # decay factor
-    desc = "decay factor, default 0.5"
-    parser.add_argument("--decay", type = float, help = desc)
+    msg = "decay factor, default 0.5"
+    parser.add_argument("--decay", type=float, help=msg)
     # random seed
-    desc = "random seed, default 1234"
-    parser.add_argument("--seed", type = int, help = desc)
+    msg = "random seed, default 1234"
+    parser.add_argument("--seed", type=int, help=msg)
 
     # compute bit per cost
-    desc = "compute bit per cost on validate dataset"
-    parser.add_argument("--bpc", action = "store_true", help = desc)
+    msg = "compute bit per cost on validate dataset"
+    parser.add_argument("--bpc", action="store_true", help=msg)
     # validate data
-    desc = "validate dataset"
-    parser.add_argument("--validate", type = str, help = desc)
+    msg = "validate dataset"
+    parser.add_argument("--validate", type=str, help=msg)
     # reference
-    desc = "reference data"
-    parser.add_argument("--ref", type = str, nargs = "+", help = desc)
+    msg = "reference data"
+    parser.add_argument("--ref", type=str, nargs="+", help=msg)
+
+    # data processing
+    msg = "sort batches"
+    parser.add_argument("--sort", type=int, help=msg)
+    msg = "shuffle every epcoh"
+    parser.add_argument("--shuffle", type=int, help=msg)
+    msg = "max length limit, default 50"
+    parser.add_argument("--limit", type=int, help=msg)
+
 
     # save frequency
-    desc = "save frequency, default 1000"
-    parser.add_argument("--freq", type = int, help = desc)
+    msg = "save frequency, default 1000"
+    parser.add_argument("--freq", type=int, help=msg)
     # sample frequency
-    desc = "sample frequency, default 50"
-    parser.add_argument("--sfreq", type = int, help = desc)
+    msg = "sample frequency, default 50"
+    parser.add_argument("--sfreq", type=int, help=msg)
     # validate frequency
-    desc = "validate frequency, default 1000"
-    parser.add_argument("--vfreq", type = int, help = desc)
+    msg = "validate frequency, default 1000"
+    parser.add_argument("--vfreq", type=int, help=msg)
 
     # control beamsearch
-    desc = "beam size"
-    parser.add_argument("--beamsize", type = int, help = desc)
+    msg = "beam size, default 10"
+    parser.add_argument("--beamsize", type=int, help=msg)
     # normalize
-    desc = "normalize probability by the length of cadidate sentences"
-    parser.add_argument("--normalize", type = int, help = desc)
+    msg = "normalize probability by the length of cadidate sentences"
+    parser.add_argument("--normalize", type=int, help=msg)
     # max length
-    desc = "max translation length"
-    parser.add_argument("--maxlen", type = int, help = desc)
+    msg = "max translation length"
+    parser.add_argument("--maxlen", type=int, help=msg)
     # min length
-    desc = "min translation length"
-    parser.add_argument("--minlen", type = int, help = desc)
+    msg = "min translation length"
+    parser.add_argument("--minlen", type=int, help=msg)
 
     return parser.parse_args(args)
 
 
 def parseargs_decode(args):
-    desc = "translate using exsiting nmt model"
+    msg = "translate using exsiting nmt model"
     usage = "rnnsearch.py translate [<args>] [-h | --help]"
-    parser = argparse.ArgumentParser(description = desc, usage = usage)
+    parser = argparse.ArgumentParser(description=msg, usage=usage)
 
     # input model
-    desc = "trained model"
-    parser.add_argument("--model", required = True, help = desc)
+    msg = "trained model"
+    parser.add_argument("--model", required=True, help=msg)
     # beam size
-    desc = "beam size"
-    parser.add_argument("--beamsize", default = 10, type = int, help = desc)
+    msg = "beam size"
+    parser.add_argument("--beamsize", default=10, type=int, help=msg)
     # normalize
-    desc = "normalize probability by the length of cadidate sentences"
-    parser.add_argument("--normalize", action = "store_true", help = desc)
+    msg = "normalize probability by the length of cadidate sentences"
+    parser.add_argument("--normalize", action="store_true", help=msg)
     # max length
-    desc = "max translation length"
-    parser.add_argument("--maxlen", type = int, help = desc)
+    msg = "max translation length"
+    parser.add_argument("--maxlen", type=int, help=msg)
     # min length
-    desc = "min translation length"
-    parser.add_argument("--minlen", type = int, help = desc)
+    msg = "min translation length"
+    parser.add_argument("--minlen", type=int, help=msg)
 
     return parser.parse_args(args)
 
@@ -351,6 +338,9 @@ def getoption():
     option["count"] = 0
     option["epoch"] = 0
     option["maxepoch"] = 5
+    option["sort"] = 20
+    option["shuffle"] = False
+    option["limit"] = 50
     option["freq"] = 1000
     option["vfreq"] = 1000
     option["sfreq"] = 50
@@ -429,6 +419,9 @@ def override(option, args):
     override_if_not_none(option, args, "vfreq")
     override_if_not_none(option, args, "sfreq")
     override_if_not_none(option, args, "seed")
+    override_if_not_none(option, args, "sort")
+    override_if_not_none(option, args, "shuffle")
+    override_if_not_none(option, args, "limit")
 
     # beamsearch
     override_if_not_none(option, args, "beamsize")
@@ -446,8 +439,7 @@ def print_option(option):
 
     print "corpus:", option["corpus"]
     print "vocab:", option["vocab"]
-    # exclude <eos> symbol
-    print "vocabsize:", [len(isvocab) - 1, len(itvocab) - 1]
+    print "vocabsize:", [len(isvocab), len(itvocab)]
 
     print "embdim:", option["embdim"]
     print "hidden:", option["hidden"]
@@ -470,6 +462,9 @@ def print_option(option):
     print "vfreq:", option["vfreq"]
     print "sfreq:", option["sfreq"]
     print "seed:", option["seed"]
+    print "sort:", option["sort"]
+    print "shuffle:", option["shuffle"]
+    print "limit:", option["limit"]
 
     print "beamsize:", option["beamsize"]
     print "normalize:", option["normalize"]
@@ -516,7 +511,15 @@ def train(args):
     autoname = os.path.join(pathname, modelname + ".autosave.pkl")
     bestname = os.path.join(pathname, modelname + ".best.pkl")
     batch = option["batch"]
-    stream = batchstream(option["corpus"], batch)
+    sortk = option["sort"] or 1
+    shuffle = option["seed"] if option["shuffle"] else None
+    reader = textreader(option["corpus"], shuffle)
+    processor = [getlen, getlen] if option["sort"] else None
+    stream = textiterator(reader, [batch, batch * sortk], processor,
+                          option["limit"], option["sort"])
+
+    if shuffle and "indices" in option and option["indices"] is not None:
+        reader.set_indices(option["indices"])
 
     skipstream(stream, option["count"])
     epoch = option["epoch"]
@@ -576,6 +579,7 @@ def train(args):
                 svars = [p.get_value() for p in trainer.parameter]
                 model.option = option
                 model.option["shared"] = svars
+                model.option["indices"] = reader.get_indices()
                 serialize(autoname, model)
 
             if count % option["vfreq"] == 0:
@@ -586,7 +590,8 @@ def train(args):
                     if bleu_score > best_score:
                         best_score = bleu_score
                         model.option = option
-                        model.option["shared"] = False
+                        model.option["shared"] = None
+                        model.option["indices"] = None
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
@@ -614,7 +619,8 @@ def train(args):
             if bleu_score > best_score:
                 best_score = bleu_score
                 model.option = option
-                model.option["shared"] = False
+                model.option["shared"] = None
+                model.option["indices"] = None
                 serialize(bestname, model)
 
         print "averaged cost: ", totcost / option["count"]
@@ -634,6 +640,7 @@ def train(args):
         svars = [p.get_value() for p in trainer.parameter]
         model.option = option
         model.option["shared"] = svars
+        model.option["indices"] = reader.get_indices()
         serialize(autoname, model)
 
     print "best(bleu): %2.4f" % best_score

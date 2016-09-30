@@ -7,8 +7,10 @@ import operator
 import cPickle
 from collections import Counter
 
+
 def processline(line):
-    return line.strip().split(" ")
+    return line.strip().split()
+
 
 def countword(name):
     fd = open(name, "r")
@@ -22,6 +24,7 @@ def countword(name):
     fd.close()
 
     return vocab
+
 
 def countchar(name):
     fd = open(name, "r")
@@ -39,15 +42,18 @@ def countchar(name):
 
     return vocab
 
+
 def sortbyfreq(vocab):
     tup = [(item[0], item[1]) for item in vocab.items()]
-    tup = sorted(tup, key = operator.itemgetter(0))
-    tup = sorted(tup, key = operator.itemgetter(1), reverse = True)
+    tup = sorted(tup, key=operator.itemgetter(0))
+    tup = sorted(tup, key=operator.itemgetter(1), reverse=True)
     return [item[0] for item in tup]
+
 
 def sortbyalpha(vocab):
     tup = sorted(vocab)
     return tup
+
 
 def save(name, voc):
     newvoc = {}
@@ -58,9 +64,11 @@ def save(name, voc):
     cPickle.dump(newvoc, fd)
     fd.close()
 
+
 def parsetokens(s):
     tlist = s.split(";")
     return tlist
+
 
 def removespecial(vocab, tokens):
     for tok in tokens:
@@ -69,6 +77,7 @@ def removespecial(vocab, tokens):
 
     return vocab
 
+
 def inserttokens(vocab, tokens):
     tokens = tokens[::-1]
 
@@ -76,6 +85,7 @@ def inserttokens(vocab, tokens):
         vocab.insert(0, tok)
 
     return vocab
+
 
 def coverage(voc, counts):
     n = 0
@@ -86,6 +96,7 @@ def coverage(voc, counts):
             n += counts[key]
 
     return float(n) / float(total)
+
 
 def create_dictionary(name, lim=0):
     global_counter = Counter()
@@ -111,26 +122,28 @@ def create_dictionary(name, lim=0):
 
     return vocab
 
+
 def parseargs():
     desc = "build vocabulary"
     parser = argparse.ArgumentParser(description = desc)
 
     desc = "corpus"
-    parser.add_argument("--corpus", required = True, help = desc)
+    parser.add_argument("--corpus", required=True, help=desc)
     desc = "output"
-    parser.add_argument("--output", required = True, help = desc)
+    parser.add_argument("--output", required=True, help=desc)
     desc = "limit"
-    parser.add_argument("--limit", default = 0, type = int, help = desc)
+    parser.add_argument("--limit", default=0, type=int, help=desc)
     desc = "character mode"
-    parser.add_argument("--char", action = "store_true", help = desc)
+    parser.add_argument("--char", action="store_true", help=desc)
     desc = "sort by alphabet"
-    parser.add_argument("--alpha", action = "store_true", help = desc)
+    parser.add_argument("--alpha", action="store_true", help=desc)
     desc = "add token"
-    parser.add_argument("--token", type = str, help = desc)
+    parser.add_argument("--token", type=str, help=desc)
     desc = "compatible with groundhog"
-    parser.add_argument("--groundhog", action = "store_true", help = desc)
+    parser.add_argument("--groundhog", action="store_true", help=desc)
 
     return parser.parse_args()
+
 
 def buildvocab(args):
     if args.char:
@@ -156,6 +169,7 @@ def buildvocab(args):
         vocab = vocab[:n] + sorted(vocab[n:])
 
     save(args.output, vocab)
+
 
 if __name__ == "__main__":
     args = parseargs()

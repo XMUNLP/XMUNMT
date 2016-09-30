@@ -2,5 +2,6 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-from plain import processdata
-from batchstream import batchstream
+from reader import textreader
+from iterator import textiterator
+from plain import processdata, getlen

@@ -4,6 +4,7 @@
 
 import sys
 
+
 def merge_corpus(outname, *clist):
     corpus_list = clist
     ofile = open(outname, "w")
@@ -22,6 +23,7 @@ def merge_corpus(outname, *clist):
         fd.close()
 
     ofile.close()
+
 
 def split_corpus(inname, *clise):
     corpus_list = clise
@@ -46,6 +48,7 @@ def split_corpus(inname, *clise):
         fd.close()
 
     ifile.close()
+
 
 if __name__ == "__main__":
     argv = sys.argv
