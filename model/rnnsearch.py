@@ -5,12 +5,13 @@
 import numpy
 import theano
 
+from nn import gru, gru_config
 from nn import linear, linear_config
 from nn import maxout, maxout_config
 from nn import config, variable_scope
+from nn import embedding, embedding_config
 from nn import feedforward, feedforward_config
 from utils import get_or_default, add_if_not_exsit
-from nn import embedding, embedding_config, gru, gru_config
 
 
 class encoder_config(config):
@@ -191,7 +192,7 @@ class decoder:
             return prob
 
         def compute_state(yemb, ymask, state, context):
-            _, new_state = rnn([yemb, context], state)
+            new_state, states = rnn([yemb, context], state)
             ymask = ymask[:, None]
             new_state = (1.0 - ymask) * state + ymask * new_state
 
@@ -371,7 +372,7 @@ class rnnsearch:
         self.sample = functions
 
 
-# based on groundhog"s impelmentation
+# based on groundhog's impelmentation
 def beamsearch(model, xseq, **option):
     add_if_not_exsit(option, "beamsize", 10)
     add_if_not_exsit(option, "normalize", False)

@@ -23,6 +23,12 @@ class textiterator:
         if processor and len(processor) != len(reader.stream):
             raise ValueError("must provide processor for each stream")
 
+        if maxlen and not isinstance(maxlen, (list, tuple)):
+            maxlen = [maxlen for i in range(len(reader.stream))]
+
+        if maxlen and len(maxlen) != len(reader.stream):
+            raise ValueError("len(maxlen) != len(reader.stream)")
+
         data = [[] for i in range(len(reader.stream))]
 
         self.end = False
@@ -56,13 +62,13 @@ class textiterator:
                     break
 
                 if self.limit and self.processor:
-                    lens = []
+                    ndata = len(new_data)
+                    exceed_lim = False
 
-                    for getlen, data in zip(self.processor, new_data):
-                        lens.append(getlen(data))
-
-                    limfunc = lambda x: x > self.limit
-                    exceed_lim = any(map(limfunc, lens))
+                    for i in range(ndata):
+                        if self.processor[i](new_data[i]) > self.limit[i]:
+                            exceed_lim = True
+                            break
 
                     if exceed_lim:
                         continue

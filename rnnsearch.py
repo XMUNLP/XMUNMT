@@ -255,8 +255,8 @@ def parseargs_train(args):
     parser.add_argument("--sort", type=int, help=msg)
     msg = "shuffle every epcoh"
     parser.add_argument("--shuffle", type=int, help=msg)
-    msg = "max length limit, default 50"
-    parser.add_argument("--limit", type=int, help=msg)
+    msg = "source and target sentence limit, default 50 (both))"
+    parser.add_argument("--limit", type=int, nargs='+', help=msg)
 
 
     # save frequency
@@ -341,7 +341,7 @@ def getoption():
     option["maxepoch"] = 5
     option["sort"] = 20
     option["shuffle"] = False
-    option["limit"] = 50
+    option["limit"] = [50, 50]
     option["freq"] = 1000
     option["vfreq"] = 1000
     option["sfreq"] = 50
@@ -368,11 +368,17 @@ def override(option, args):
 
     # training corpus
     if args.corpus == None and option["corpus"] == None:
-        raise RuntimeError("error: no training corpus specified")
+        raise ValueError("error: no training corpus specified")
 
     # vocabulary
     if args.vocab == None and option["vocab"] == None:
-        raise RuntimeError("error: no training vocabulary specified")
+        raise ValueError("error: no training vocabulary specified")
+
+    if args.limit and len(args.limit) > 2:
+        raise ValueError("error: invalid number of --limit argument (<=2)")
+
+    if args.limit and len(args.limit) == 1:
+        args.limit = args.limit * 2
 
     override_if_not_none(option, args, "corpus")
 
@@ -534,6 +540,8 @@ def train(args):
     else:
         set_variables(model.parameter, params)
 
+    print "parameters:", parameters(model.parameter)
+
     # tuning option
     toption = {}
     toption["algorithm"] = option["optimizer"]
@@ -550,8 +558,6 @@ def train(args):
     doption["normalize"] = option["normalize"]
     doption["maxlen"] = option["maxlen"]
     doption["minlen"] = option["minlen"]
-
-    print "parameters:", parameters(model.parameter)
 
     best_score = 0.0
 
@@ -599,7 +605,7 @@ def train(args):
                 ind = np.random.randint(0, batch)
                 sdata = data[0][ind]
                 tdata = data[1][ind]
-                xdata = xdata[:, ind:ind + 1]
+                xdata = xdata[:, ind : ind + 1]
                 hls = beamsearch(model, xdata)
                 if len(hls) > 0:
                     best, score = hls[0]
