@@ -1,3 +1,7 @@
+# shuffle.py
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
+
 import numpy
 import argparse
 
@@ -10,6 +14,8 @@ def parseargs():
     parser.add_argument("--corpus", nargs="+", required=True, help=msg)
     msg = "output file suffix"
     parser.add_argument("--suffix", type=str, default="shuf", help=msg)
+    msg = "random seed"
+    parser.add_argument("--seed", type=int, help=msg)
 
     return parser.parse_args()
 
@@ -20,6 +26,10 @@ def main(args):
     stream = [open(item, "r") for item in name]
     data = [fd.readlines() for fd in stream]
     minlen = min([len(lines) for lines in data])
+
+    if args.seed:
+        numpy.random.seed(args.seed)
+
     indices = numpy.arange(minlen)
     numpy.random.shuffle(indices)
 

@@ -8,22 +8,22 @@ An implementation of RNNsearch using theano, the implementation is the same with
 1. Build vocabulary
   * Build source vocabulary
   ```
-  python buildvocab.py --corpus zh.txt --output vocab.zh.pkl --limit 30000 \
-                       --groundhog
+  python scripts/buildvocab.py --corpus zh.txt --output vocab.zh.pkl
+                               --limit 30000 --groundhog
   ```
   * Build target vocabulary
   ```
-  python buildvocab.py --corpus en.txt --output vocab.en.pkl --limit 30000 \
-                       --groundhog
+  python scripts/buildvocab.py --corpus en.txt --output vocab.en.pkl
+                               --limit 30000 --groundhog
   ```
 2. Shuffle corpus (Optional)
 ```
-python shuffle.py --corpus zh.txt en.txt
+python scripts/shuffle.py --corpus zh.txt en.txt
 ```
 
 ### Training
 ```
-  python rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
+  python apps/rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
     --vocab zh.vocab.pkl en.vocab.pkl --model nmt --embdim 620 620 \
     --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2 \
     --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234 \
@@ -32,9 +32,9 @@ python shuffle.py --corpus zh.txt en.txt
   ```
 ### Decoding
 ```
-  python rnnsearch.py translate --model nmt.best.pkl < nist03.src > nist03.txt
+  python apps/rnnsearch.py translate --model nmt.best.pkl < input > translation
 ```
 ### Resume training
 ```
-  python rnnsearch.py train --model nmt.autosave.pkl
+  python apps/rnnsearch.py train --model nmt.autosave.pkl
 ```

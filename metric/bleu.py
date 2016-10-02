@@ -3,11 +3,8 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-
 import re
 import math
-import numpy
-from collections import Counter
 
 
 # tokenization from mteval
@@ -118,7 +115,7 @@ def brevity_penalty(trans, refs, mode="closest"):
 
 # trans: a list of tokenized sentence
 # refs: a list of list of tokenized reference sentences
-def bleu(trans, refs, bp="closest", n=4, weight=None):
+def bleu(trans, refs, bp="closest", smooth=False, n=4, weight=None):
     p_norm = [0 for i in range(n)]
     p_denorm = [0 for i in range(n)]
 
@@ -131,6 +128,11 @@ def bleu(trans, refs, bp="closest", n=4, weight=None):
     bleu_n = [0 for i in range(n)]
 
     for i in range(n):
+        # add one smoothing
+        if smooth and i > 0:
+            p_norm[i] += 1
+            p_denorm[i] += 1
+
         if p_norm[i] == 0 or p_denorm[i] == 0:
             bleu_n[i] = -9999
         else:
@@ -141,41 +143,3 @@ def bleu(trans, refs, bp="closest", n=4, weight=None):
     bleu = bp * math.exp(sum(bleu_n) / float(n))
 
     return bleu
-
-
-def bleu_stats(hypo, ref, k):
-    yield len(hypo)
-    yield len(ref)
-    for n in xrange(1, k + 1):
-        sngrams = [tuple(hypo[i : i + n]) for i in xrange(len(hypo) + 1 - n)]
-        rngrams = [tuple(ref[i : i + n]) for i in xrange(len(ref) + 1 - n)]
-        scounts = Counter(sngrams)
-        rcounts = Counter(rngrams)
-        yield sum((scounts & rcounts).values())
-        yield max(len(hypo) + 1 - n, 0)
-
-        
-def sentence_bleu(hypothesis, reference, n=4):
-    stats = list(bleu_stats(hypothesis, reference, n))
-    stats = numpy.atleast_2d(numpy.asarray(stats))[:, :10].sum(axis=0)
-
-    if not all(stats):
-        return 0
-    c, r = stats[:2]
-
-    vals = [numpy.log(float(x) / y) for x, y in zip(stats[2::2], stats[3::2])]
-    log_bleu_prec = sum(vals) / float(n)
-    return numpy.exp(min(0, 1 - float(r) / c) + log_bleu_prec)
-
-
-def smoothed_sentence_bleu(hypothesis, reference, n=4):
-    stats = list(bleu_stats(hypothesis, reference, n))
-    c, r = stats[:2]
-
-    # smoothed transform
-    def transform(x, y):
-      return numpy.log((1 + float(x)) / (1 + y))
-
-    vals = [transform(x, y) for x, y in zip(stats[2::2], stats[3::2])]
-    log_bleu_prec = sum(vals) / float(n)
-    return numpy.exp(min(0, 1 - float(r) / c) + log_bleu_prec)
