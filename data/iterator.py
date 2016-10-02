@@ -2,7 +2,7 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-import numpy as np
+import numpy
 
 
 class textiterator:
@@ -86,8 +86,8 @@ class textiterator:
                 for getlen, data in zip(self.processor, self.data):
                     lens.append(map(getlen, data))
 
-                lens = np.asarray(lens)
-                order = np.argsort(lens.max(axis=0))
+                lens = numpy.asarray(lens)
+                order = numpy.argsort(lens.max(axis=0))
                 newdata = []
 
                 for data in self.data:

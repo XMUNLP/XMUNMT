@@ -2,7 +2,7 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-import numpy as np
+import numpy
 
 
 # lowest-level stream
@@ -23,13 +23,13 @@ class textreader:
             readall = True
 
             if not isinstance(shuffle, bool):
-                randstate = np.random.RandomState(shuffle)
+                randstate = numpy.random.RandomState(shuffle)
                 shuffle = randstate.shuffle
             else:
-                shuffle = np.random.shuffle
+                shuffle = numpy.random.shuffle
 
             linecnt = min([len(text) for text in texts])
-            indices = np.arange(linecnt)
+            indices = numpy.arange(linecnt)
             shuffle(indices)
         else:
             indices = None
@@ -92,7 +92,7 @@ class textreader:
 
         if self.shuffle:
             linecnt = min([len(text) for text in self.texts])
-            indices = np.arange(linecnt)
+            indices = numpy.arange(linecnt)
             self.shuffle(indices)
             self.indices = indices
 

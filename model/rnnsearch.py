@@ -82,6 +82,40 @@ class rnnsearch_config(config):
         self.decoder = decoder_config(dtype=self.dtype)
 
 
+# standard rnnsearch configuration (groundhog version)
+def get_config():
+    config = rnnsearch_config()
+
+    config["*/concat"] = False
+    config["*/output_major"] = False
+
+    # embedding
+    config["source_embedding/bias/use"] = True
+    config["target_embedding/bias/use"] = True
+
+    # encoder
+    config["encoder/forward_rnn/reset_gate/bias/use"] = False
+    config["encoder/forward_rnn/update_gate/bias/use"] = False
+    config["encoder/forward_rnn/candidate/bias/use"] = True
+    config["encoder/backward_rnn/reset_gate/bias/use"] = False
+    config["encoder/backward_rnn/update_gate/bias/use"] = False
+    config["encoder/backward_rnn/candidate/bias/use"] = True
+
+    # decoder
+    config["decoder/init_transform/bias/use"] = True
+    config["decoder/annotation_transform/bias/use"] = False
+    config["decoder/state_transform/bias/use"] = False
+    config["decoder/context_transform/bias/use"] = False
+    config["decoder/rnn/reset_gate/bias/use"] = False
+    config["decoder/rnn/update_gate/bias/use"] = False
+    config["decoder/rnn/candidate/bias/use"] = True
+    config["decoder/maxout/bias/use"] = True
+    config["decoder/deepout/bias/use"] = False
+    config["decoder/classify/bias/use"] = True
+
+    return config
+
+
 class encoder:
 
     def __init__(self, input_size, hidden_size, config=encoder_config()):
@@ -242,7 +276,7 @@ class decoder:
 
 class rnnsearch:
 
-    def __init__(self, config=rnnsearch_config(), **option):
+    def __init__(self, config=get_config(), **option):
         scope = config.scope
 
         sedim, tedim = option["embdim"]

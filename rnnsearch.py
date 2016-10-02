@@ -6,49 +6,14 @@ import os
 import sys
 import math
 import time
+import numpy
 import cPickle
 import argparse
-
-import numpy as np
 
 from metric import bleu
 from optimizer import optimizer
 from data import textreader, textiterator, processdata, getlen
-from model.rnnsearch import rnnsearch, rnnsearch_config, beamsearch
-
-
-# standard rnnsearch configuration (groundhog version)
-def get_config():
-    config = rnnsearch_config()
-
-    config["*/concat"] = False
-    config["*/output_major"] = False
-
-    # embedding
-    config["source_embedding/bias/use"] = True
-    config["target_embedding/bias/use"] = True
-
-    # encoder
-    config["encoder/forward_rnn/reset_gate/bias/use"] = False
-    config["encoder/forward_rnn/update_gate/bias/use"] = False
-    config["encoder/forward_rnn/candidate/bias/use"] = True
-    config["encoder/backward_rnn/reset_gate/bias/use"] = False
-    config["encoder/backward_rnn/update_gate/bias/use"] = False
-    config["encoder/backward_rnn/candidate/bias/use"] = True
-
-    # decoder
-    config["decoder/init_transform/bias/use"] = True
-    config["decoder/annotation_transform/bias/use"] = False
-    config["decoder/state_transform/bias/use"] = False
-    config["decoder/context_transform/bias/use"] = False
-    config["decoder/rnn/reset_gate/bias/use"] = False
-    config["decoder/rnn/update_gate/bias/use"] = False
-    config["decoder/rnn/candidate/bias/use"] = True
-    config["decoder/maxout/bias/use"] = True
-    config["decoder/deepout/bias/use"] = False
-    config["decoder/classify/bias/use"] = True
-
-    return config
+from model.rnnsearch import rnnsearch, beamsearch
 
 
 def loadvocab(file):
@@ -70,7 +35,7 @@ def uniform(params, lower, upper, dtype="float32"):
 
     for p in params:
         s = p.get_value().shape
-        v = np.random.uniform(lower, upper, s).astype(dtype)
+        v = numpy.random.uniform(lower, upper, s).astype(dtype)
         p.set_value(v)
 
 
@@ -89,7 +54,7 @@ def serialize(name, model):
     option = model.option
     params = model.parameter
 
-    pval = [p.get_value() for p in params]
+    pval = [(p.name, p.get_value()) for p in params]
 
     cPickle.dump(option, fd)
     cPickle.dump(pval, fd)
@@ -108,7 +73,7 @@ def loadmodel(name):
 
 def set_variables(params, values):
     for p, v in zip(params, values):
-        p.set_value(v)
+        p.set_value(v[1])
 
 
 def loadreferences(names, case=True):
@@ -142,12 +107,15 @@ def validate(scorpus, tcorpus, model, batch):
     reader = textreader([scorpus, tcorpus])
     stream = textiterator(reader, [batch, batch])
     svocabs, tvocabs = model.vocabulary
+    unk_symbol = model.option["unk"]
+    eos_symbol = model.option["eos"]
+
     totcost = 0.0
     count = 0
 
     for data in stream:
-        xdata, xmask = processdata(data[0], svocabs[0], model.option["eos"])
-        ydata, ymask = processdata(data[1], tvocabs[0], model.option["eos"])
+        xdata, xmask = processdata(data[0], svocabs[0], unk_symbol, eos_symbol)
+        ydata, ymask = processdata(data[1], tvocabs[0], unk_symbol, eos_symbol)
         cost = model.compute(xdata, xmask, ydata, ymask)
         cost = cost[0]
         cost = cost * ymask.shape[1] / ymask.sum()
@@ -164,11 +132,14 @@ def validate(scorpus, tcorpus, model, batch):
 def translate(model, corpus, **opt):
     fd = open(corpus, "r")
     svocab = model.option["vocabulary"][0][0]
+    unk_symbol = model.option["unk"]
+    eos_symbol = model.option["eos"]
+
     trans = []
 
     for line in fd:
         line = line.strip()
-        data, mask = processdata([line], svocab, eos=model.option["eos"])
+        data, mask = processdata([line], svocab, unk_symbol, eos_symbol)
         hls = beamsearch(model, data, **opt)
         if len(hls) > 0:
             best, score = hls[0]
@@ -355,6 +326,10 @@ def getoption():
     option["maxlen"] = None
     option["minlen"] = None
 
+    # special symbols
+    option["unk"] = "UNK"
+    option["eos"] = "<eos>"
+
     return option
 
 
@@ -394,11 +369,10 @@ def override(option, args):
         option["source_eos_id"] = len(isvocab)
         option["target_eos_id"] = len(itvocab)
 
-        option["eos"] = "<eos>"
-        svocab["<eos>"] = option["source_eos_id"]
-        tvocab["<eos>"] = option["target_eos_id"]
-        isvocab[option["source_eos_id"]] = "<eos>"
-        itvocab[option["target_eos_id"]] = "<eos>"
+        svocab[option["eos"]] = option["source_eos_id"]
+        tvocab[option["eos"]] = option["target_eos_id"]
+        isvocab[option["source_eos_id"]] = option["eos"]
+        itvocab[option["target_eos_id"]] = option["eos"]
 
         option["vocabulary"] = [[svocab, isvocab], [tvocab, itvocab]]
 
@@ -478,6 +452,10 @@ def print_option(option):
     print "maxlen:", option["maxlen"]
     print "minlen:", option["minlen"]
 
+    # special symbols
+    print "unk:", option["unk"]
+    print "eos:", option["eos"]
+
 
 def skipstream(stream, count):
     for i in range(count):
@@ -502,7 +480,7 @@ def train(args):
     print_option(option)
 
     # set seed
-    np.random.seed(option["seed"])
+    numpy.random.seed(option["seed"])
 
     if option["ref"]:
         references = loadreferences(option["ref"])
@@ -533,7 +511,7 @@ def train(args):
     maxepoch = option["maxepoch"]
     option["model"] = "rnnsearch"
 
-    model = rnnsearch(get_config(), **option)
+    model = rnnsearch(**option)
 
     if init:
         uniform(model.parameter, -0.08, 0.08)
@@ -560,12 +538,14 @@ def train(args):
     doption["minlen"] = option["minlen"]
 
     best_score = 0.0
+    unk_symbol = option["unk"]
+    eos_symbol = option["eos"]
 
     for i in range(epoch, maxepoch):
         totcost = 0.0
         for data in stream:
-            xdata, xmask = processdata(data[0], svocab, eos=option["eos"])
-            ydata, ymask = processdata(data[1], tvocab, eos=option["eos"])
+            xdata, xmask = processdata(data[0], svocab, unk_symbol, eos_symbol)
+            ydata, ymask = processdata(data[1], tvocab, unk_symbol, eos_symbol)
 
             t1 = time.time()
             cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
@@ -602,7 +582,7 @@ def train(args):
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
-                ind = np.random.randint(0, batch)
+                ind = numpy.random.randint(0, batch)
                 sdata = data[0][ind]
                 tdata = data[1][ind]
                 xdata = xdata[:, ind : ind + 1]
@@ -657,11 +637,14 @@ def train(args):
 
 def decode(args):
     option, params = loadmodel(args.model)
-    model = rnnsearch(get_config(), **option)
+    model = rnnsearch(**option)
 
     set_variables(model.parameter, params)
 
-    svocabs, tvocabs = model.option["vocabulary"]
+    svocabs, tvocabs = option["vocabulary"]
+    unk_symbol = option["unk"]
+    eos_symbol = option["eos"]
+
     svocab, isvocab = svocabs
     tvocab, itvocab = tvocabs
 
@@ -680,7 +663,7 @@ def decode(args):
             break
 
         data = [line]
-        seq, mask = processdata(data, svocab, eos=option["eos"])
+        seq, mask = processdata(data, svocab, unk_symbol, eos_symbol)
         t1 = time.time()
         tlist = beamsearch(model, seq, **option)
         t2 = time.time()

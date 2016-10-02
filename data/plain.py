@@ -2,7 +2,7 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-import numpy as np
+import numpy
 
 
 def getlen(line):
@@ -28,10 +28,10 @@ def normalize(bat):
     blen = [len(item) for item in bat]
 
     n = len(bat)
-    maxlen = np.max(blen)
+    maxlen = numpy.max(blen)
 
-    b = np.zeros((maxlen, n), "int32")
-    m = np.zeros((maxlen, n), "float32")
+    b = numpy.zeros((maxlen, n), "int32")
+    m = numpy.zeros((maxlen, n), "float32")
 
     for idx, item in enumerate(bat):
         b[:blen[idx], idx] = item
