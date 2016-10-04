@@ -53,7 +53,7 @@ class embedding:
             emb = variable("embedding", (num, dim), initializer, dtype)
             params.append(emb)
             if use_bias:
-                bias = variable("bias", (dim,), initializer, dtype)
+                bias = variable("bias", (dim,), b_initializer, dtype)
                 params.append(bias)
 
         def forward(indices):

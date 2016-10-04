@@ -49,4 +49,3 @@ def main(args):
 if __name__ == "__main__":
     arg = parseargs()
     main(arg)
-

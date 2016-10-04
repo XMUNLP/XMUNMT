@@ -23,7 +23,7 @@ python scripts/shuffle.py --corpus zh.txt en.txt
 
 ### Training
 ```
-  python apps/rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
+  python rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
     --vocab zh.vocab.pkl en.vocab.pkl --model nmt --embdim 620 620 \
     --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2 \
     --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234 \
@@ -32,9 +32,9 @@ python scripts/shuffle.py --corpus zh.txt en.txt
   ```
 ### Decoding
 ```
-  python apps/rnnsearch.py translate --model nmt.best.pkl < input > translation
+  python rnnsearch.py translate --model nmt.best.pkl < input > translation
 ```
 ### Resume training
 ```
-  python apps/rnnsearch.py train --model nmt.autosave.pkl
+  python rnnsearch.py train --model nmt.autosave.pkl
 ```
