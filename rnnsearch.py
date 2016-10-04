@@ -499,7 +499,7 @@ def train(args):
     sortk = option["sort"] or 1
     shuffle = option["seed"] if option["shuffle"] else None
     reader = textreader(option["corpus"], shuffle)
-    processor = [getlen, getlen] if option["sort"] else None
+    processor = [getlen, getlen]
     stream = textiterator(reader, [batch, batch * sortk], processor,
                           option["limit"], option["sort"])
 
@@ -599,7 +599,7 @@ def train(args):
 
         print "--------------------------------------------------"
 
-        if option["vfreq"] and references:
+        if option["validate"] and references:
             trans = translate(model, option["validate"], **doption)
             bleu_score = bleu(trans, references)
             print "iter: %d, bleu: %2.4f" % (i + 1, bleu_score)
