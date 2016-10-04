@@ -66,6 +66,9 @@ class textiterator:
                     exceed_lim = False
 
                     for i in range(ndata):
+                        if not self.limit[i]:
+                            continue
+
                         if self.processor[i](new_data[i]) > self.limit[i]:
                             exceed_lim = True
                             break

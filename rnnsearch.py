@@ -155,7 +155,7 @@ def translate(model, corpus, **opt):
 def parseargs_train(args):
     msg = "training rnnsearch"
     usage = "rnnsearch.py train [<args>] [-h | --help]"
-    parser = argparse.ArgumentParser(description = msg, usage = usage)
+    parser = argparse.ArgumentParser(description=msg, usage=usage)
 
     # training corpus
     msg = "source and target corpus"
@@ -226,7 +226,7 @@ def parseargs_train(args):
     parser.add_argument("--sort", type=int, help=msg)
     msg = "shuffle every epcoh"
     parser.add_argument("--shuffle", type=int, help=msg)
-    msg = "source and target sentence limit, default 50 (both))"
+    msg = "source and target sentence limit, default 50 (both), 0 to disable"
     parser.add_argument("--limit", type=int, nargs='+', help=msg)
 
 
