@@ -14,7 +14,6 @@ class maxout_config(config):
     """
     * dtype: str, default theano.config.floatX
     * scope: str, default "linear"
-    * maxpart: int, maxpart number, default 2
     * concat: bool, True to concate weights, False to use seperate weights
     * multibias: bool, True to use bias per input, only works when
     *            concat = False

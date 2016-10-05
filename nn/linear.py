@@ -106,9 +106,9 @@ class linear:
                     x = theano.tensor.concatenate(x, -1)
 
                 if output_major:
-                    outs.append(theano.dot(x, weight[0].transpose()))
+                    outs.append(theano.dot(x, weights[0].transpose()))
                 else:
-                    outs.append(theano.dot(x, weight[0]))
+                    outs.append(theano.dot(x, weights[0]))
 
                 if use_bias:
                     outs.append(biases[0])
