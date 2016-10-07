@@ -88,7 +88,10 @@ def variable(name, shape, initializer, dtype=theano.config.floatX,
     global _TRAINABLE_VARIABLES
     global _ALL_VARIABLES
 
-    val = initializer(shape).astype(dtype)
+    if callable(initializer):
+        val = initializer()(shape, dtype)
+    else:
+        val = initializer
 
     scope = get_variable_scope()
 

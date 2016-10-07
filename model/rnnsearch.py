@@ -355,7 +355,7 @@ class rnnsearch:
                 inputs = [state, xmask, annotation, mannotation]
                 alpha, context = rnn_decoder.compute_context(*inputs)
 
-                return theano.function(inputs, context)
+                return theano.function(inputs, [context, alpha])
 
             def compute_probability():
                 y = theano.tensor.ivector()
@@ -407,22 +407,21 @@ class rnnsearch:
 
 
 # based on groundhog's impelmentation
-def beamsearch(model, xseq, **option):
+def beamsearch(models, xseq, **option):
     add_if_not_exsit(option, "beamsize", 10)
     add_if_not_exsit(option, "normalize", False)
     add_if_not_exsit(option, "maxlen", None)
     add_if_not_exsit(option, "minlen", None)
+    add_if_not_exsit(option, "arithmetric", False)
 
-    functions = model.sample
+    if not isinstance(models, (list, tuple)):
+        models = [models]
 
-    encode = functions[0]
-    compute_istate = functions[1]
-    compute_context = functions[2]
-    compute_probs = functions[3]
-    compute_state = functions[4]
+    num_models = len(models)
+    functions = [model.sample for model in models]
 
-    vocabulary = model.option["vocabulary"]
-    eos = model.option["eos"]
+    vocabulary = models[0].option["vocabulary"]
+    eos = models[0].option["eos"]
     vocab = vocabulary[1][1]
     eosid = vocabulary[1][0][eos]
 
@@ -430,6 +429,7 @@ def beamsearch(model, xseq, **option):
     maxlen = option["maxlen"]
     minlen = option["minlen"]
     normalize = option["normalize"]
+    arithmetric = option["arithmetric"]
 
     if maxlen == None:
         maxlen = len(xseq) * 3
@@ -437,13 +437,24 @@ def beamsearch(model, xseq, **option):
     if minlen == None:
         minlen = len(xseq) / 2
 
-    xmask = numpy.ones(xseq.shape, "float32")
-    annot = encode(xseq, xmask)
-    state, mannot = compute_istate(annot)
+    annot = [None for i in range(num_models)]
+    mannot = [None for i in range(num_models)]
+    contexts = [None for i in range(num_models)]
+    states = [None for i in range(num_models)]
+    probs = [None for i in range(num_models)]
 
-    hdim = state.shape[1]
-    cdim = annot.shape[2]
-    states = state
+    xmask = numpy.ones(xseq.shape, "float32")
+
+    for i in range(num_models):
+        encode = functions[i][0]
+        compute_istate = functions[i][1]
+        annot[i] = encode(xseq, xmask)
+        states[i], mannot[i] = compute_istate(annot[i])
+
+    hdim = states[0].shape[1]
+    cdim = annot[0].shape[2]
+    # [num_models, batch, dim]
+    states = numpy.array(states)
 
     trans = [[]]
     costs = [0.0]
@@ -463,12 +474,24 @@ def beamsearch(model, xseq, **option):
             last_words = numpy.zeros(num, "int32")
 
         xmasks = numpy.repeat(xmask, num, 1)
-        annots = numpy.repeat(annot, num, 1)
-        mannots = numpy.repeat(mannot, num, 1)
-        contexts = compute_context(states, xmasks, annots, mannots)
+        ymask = numpy.ones((num,), "float32")
+        annots = [numpy.repeat(annot[i], num, 1) for i in range(num_models)]
+        mannots = [numpy.repeat(mannot[i], num, 1) for i in range(num_models)]
 
-        probs = compute_probs(last_words, states, contexts)
-        logprobs = numpy.log(probs)
+        for i in range(num_models):
+            compute_context = functions[i][2]
+            contexts[i], alpha = compute_context(states[i], xmasks, annots[i],
+                                          mannots[i])
+
+        for i in range(num_models):
+            compute_probs = functions[i][3]
+            probs[i] = compute_probs(last_words, states[i], contexts[i])
+
+        if arithmetric:
+            logprobs = numpy.log(sum(probs) / num_models)
+        else:
+            # geometric mean
+            logprobs = sum(numpy.log(probs)) / num_models
 
         if k < minlen:
             logprobs[:, eosid] = -numpy.inf
@@ -491,19 +514,24 @@ def beamsearch(model, xseq, **option):
 
         newtrans = [[]] * size
         newcosts = numpy.zeros(size)
-        newstates = numpy.zeros((size, hdim), "float32")
-        newcontexts = numpy.zeros((size, cdim), "float32")
+        newstates = numpy.zeros((num_models, size, hdim), "float32")
+        newcontexts = numpy.zeros((num_models, size, cdim), "float32")
         inputs = numpy.zeros(size, "int32")
 
         for i, (idx, nword, ncost) in enumerate(zip(tinds, winds, costs)):
             newtrans[i] = trans[idx] + [nword]
             newcosts[i] = ncost
-            newstates[i] = states[idx]
-            newcontexts[i] = contexts[idx]
+            for j in range(num_models):
+                newstates[j][i] = states[j][idx]
+                newcontexts[j][i] = contexts[j][idx]
             inputs[i] = nword
 
         ymask = numpy.ones((size,), "float32")
-        newstates = compute_state(inputs, ymask, newstates, newcontexts)
+
+        for i in range(num_models):
+            compute_state = functions[i][-1]
+            newstates[i] = compute_state(inputs, ymask, newstates[i],
+                                         newcontexts[i])
 
         trans = []
         costs = []
@@ -518,7 +546,8 @@ def beamsearch(model, xseq, **option):
                 size -= 1
                 final_trans.append(newtrans[i])
                 final_costs.append(newcosts[i])
-        states = newstates[indices]
+
+        states = newstates[:, indices]
 
     if len(final_trans) == 0:
         final_trans = [[]]

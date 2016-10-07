@@ -263,13 +263,16 @@ def parseargs_decode(args):
 
     # input model
     msg = "trained model"
-    parser.add_argument("--model", required=True, help=msg)
+    parser.add_argument("--model", nargs="+", required=True, help=msg)
     # beam size
     msg = "beam size"
     parser.add_argument("--beamsize", default=10, type=int, help=msg)
     # normalize
     msg = "normalize probability by the length of cadidate sentences"
     parser.add_argument("--normalize", action="store_true", help=msg)
+    # arithmetic
+    msg = "use arithmetic mean instead of geometric mean"
+    parser.add_argument("--arithmetic", action="store_true", help=msg)
     # max length
     msg = "max translation length"
     parser.add_argument("--maxlen", type=int, help=msg)
@@ -636,25 +639,31 @@ def train(args):
 
 
 def decode(args):
-    option, params = loadmodel(args.model)
-    model = rnnsearch(**option)
+    num_models = len(args.model)
+    models = [None for i in range(num_models)]
 
-    set_variables(model.parameter, params)
+    for i in range(num_models):
+        option, params = loadmodel(args.model[i])
+        model = rnnsearch(**option)
+        set_variables(model.parameter, params)
+        models[i] = model
 
-    svocabs, tvocabs = option["vocabulary"]
-    unk_symbol = option["unk"]
-    eos_symbol = option["eos"]
+    # use the first model
+    svocabs, tvocabs = models[0].option["vocabulary"]
+    unk_symbol = models[0].option["unk"]
+    eos_symbol = models[0].option["eos"]
+
+    count = 0
 
     svocab, isvocab = svocabs
     tvocab, itvocab = tvocabs
-
-    count = 0
 
     option = {}
     option["maxlen"] = args.maxlen
     option["minlen"] = args.minlen
     option["beamsize"] = args.beamsize
     option["normalize"] = args.normalize
+    option["arithmetic"] = args.arithmetic
 
     while True:
         line = sys.stdin.readline()
