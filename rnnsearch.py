@@ -674,7 +674,7 @@ def decode(args):
         data = [line]
         seq, mask = processdata(data, svocab, unk_symbol, eos_symbol)
         t1 = time.time()
-        tlist = beamsearch(model, seq, **option)
+        tlist = beamsearch(models, seq, **option)
         t2 = time.time()
 
         if len(tlist) == 0:
