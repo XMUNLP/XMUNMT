@@ -232,6 +232,22 @@ class decoder:
 
             return new_state
 
+        def compute_attention_score(yseq, xmask, ymask, annotation):
+            initstate, mapped_annotation = compute_initstate(annotation)
+
+            def step(yemb, ymask, state, xmask, annotation, mannotation):
+                outs = compute_context(state, xmask, annotation, mannotation)
+                alpha, context = outs
+                new_state = compute_state(yemb, ymask, state, context)
+                return [new_state, alpha]
+
+            seq = [yseq, ymask]
+            oinfo = [initstate, None]
+            nonseq = [xmask, annotation, mapped_annotation]
+            (states, alpha), updates = theano.scan(step, seq, oinfo, nonseq)
+
+            return alpha
+
         def forward(yseq, xmask, ymask, annotation):
             yshift = theano.tensor.zeros_like(yseq)
             yshift = theano.tensor.set_subtensor(yshift[1:], yseq[:-1])
@@ -269,6 +285,7 @@ class decoder:
         self.compute_context = compute_context
         self.compute_probability = compute_probability
         self.compute_state = compute_state
+        self.compute_attention_score = compute_attention_score
 
     def __call__(self, yseq, xmask, ymask, annotation):
         return self.forward(yseq, xmask, ymask, annotation)
@@ -392,6 +409,22 @@ class rnnsearch:
 
             return functions
 
+        def build_attention():
+            xseq = theano.tensor.imatrix()
+            xmask = theano.tensor.matrix()
+            yseq = theano.tensor.imatrix()
+            ymask = theano.tensor.matrix()
+
+            xemb = source_embedding(xseq)
+            yemb = target_embedding(yseq)
+            initstate = theano.tensor.zeros((xemb.shape[1], shdim))
+
+            annotation = rnn_encoder(xemb, xmask, initstate)
+            alpha = rnn_decoder.compute_attention_score(yemb, xmask, ymask,
+                                                        annotation)
+
+            return theano.function([xseq, xmask, yseq, ymask], alpha)
+
         train_inputs, train_outputs = build_training()
         functions = build_sampling()
 
@@ -404,6 +437,7 @@ class rnnsearch:
         self.outputs = train_outputs
         self.updates = []
         self.sample = functions
+        self.attention = build_attention()
 
 
 # based on groundhog's impelmentation

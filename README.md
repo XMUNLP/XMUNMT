@@ -21,6 +21,13 @@ An implementation of RNNsearch using theano, the implementation is the same with
 python scripts/shuffle.py --corpus zh.txt en.txt
 ```
 
+### Build Dictionary (Optional)
+If you want to use UNK replacement feature, you can build dictionary by
+providing alignment file
+```
+python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
+```
+
 ### Training
 ```
   python rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
@@ -33,6 +40,11 @@ python scripts/shuffle.py --corpus zh.txt en.txt
 ### Decoding
 ```
   python rnnsearch.py translate --model nmt.best.pkl < input > translation
+```
+### UNK replacement
+```
+  python rnnsearch.py replace --model nmt.best.pkl --text input translation \
+    --dictionary dict.zh-en > newtranslation
 ```
 ### Resume training
 ```

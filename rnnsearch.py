@@ -152,6 +152,32 @@ def translate(model, corpus, **opt):
     return trans
 
 
+# format: source target prob
+def load_dictionary(filename):
+    fd = open(filename)
+
+    mapping = {}
+
+    for line in fd:
+        sword, tword, prob = line.strip().split()
+        prob = float(prob)
+
+        if sword in mapping:
+            oldword, oldprob = mapping[sword]
+            if prob > oldprob:
+                mapping[sword] = (tword, prob)
+        else:
+            mapping[sword] = (tword, prob)
+
+    newmapping = {}
+    for item in mapping:
+        newmapping[item] = mapping[item][0]
+
+    fd.close()
+
+    return newmapping
+
+
 def parseargs_train(args):
     msg = "training rnnsearch"
     usage = "rnnsearch.py train [<args>] [-h | --help]"
@@ -279,6 +305,33 @@ def parseargs_decode(args):
     # min length
     msg = "min translation length"
     parser.add_argument("--minlen", type=int, help=msg)
+
+    return parser.parse_args(args)
+
+
+def parseargs_replace(args):
+    msg = "translate using exsiting nmt model"
+    usage = "rnnsearch.py replace [<args>] [-h | --help]"
+    parser = argparse.ArgumentParser(description=msg, usage=usage)
+
+    # input model
+    msg = "trained models"
+    parser.add_argument("--model", required=True, nargs="+", help=msg)
+    # texts
+    msg = "source text and translation file"
+    parser.add_argument("--text", required=True, nargs=2, help=msg)
+    # dictionary
+    msg = "replacement dictionary"
+    parser.add_argument("--dictionary", required=True, type=str, help=msg)
+    # heuristic
+    msg = "replacement heuristic (0: copy, 1: replace, 2: heuristic replace)"
+    parser.add_argument("--heuristic", type=int, default=1, help=msg)
+    # batch
+    msg = "batch size"
+    parser.add_argument("--batch", type=int, default=128, help=msg)
+    # arithmetic
+    msg = "use arithmetic mean instead of geometric mean"
+    parser.add_argument("--arithmetic", action="store_true", help=msg)
 
     return parser.parse_args(args)
 
@@ -690,11 +743,96 @@ def decode(args):
         sys.stderr.write(str(score) + " " + str(t2 - t1) + "\n")
 
 
+# unk replacement
+def replace(args):
+    num_models = len(args.model)
+    models = [None for i in range(num_models)]
+    alignments = [None for i in range(num_models)]
+    mapping = load_dictionary(args.dictionary)
+    heuristic = args.heuristic
+
+    for i in range(num_models):
+        option, params = loadmodel(args.model[i])
+        model = rnnsearch(**option)
+        set_variables(model.parameter, params)
+        models[i] = model
+
+    # use the first model
+    svocabs, tvocabs = models[0].option["vocabulary"]
+    unk_symbol = models[0].option["unk"]
+    eos_symbol = models[0].option["eos"]
+
+    svocab, isvocab = svocabs
+    tvocab, itvocab = tvocabs
+
+    reader = textreader(args.text, False)
+    stream = textiterator(reader, [args.batch, args.batch])
+
+    for data in stream:
+        xdata, xmask = processdata(data[0], svocab, unk_symbol, eos_symbol)
+        ydata, ymask = processdata(data[1], tvocab, unk_symbol, eos_symbol)
+
+        for i in range(num_models):
+            # compute attention score
+            alignments[i] = models[i].attention(xdata, xmask, ydata, ymask)
+
+        # ensemble, alignment: yseq * xseq * batch
+        if args.arithmetic:
+            alignment = sum(alignments) / num_models
+        else:
+            alignments = map(numpy.log, alignments)
+            alignment = numpy.exp(sum(alignments) / num_models)
+
+        #  find source word to which each target word was most aligned
+        indices = numpy.argmax(alignment, 1)
+
+        # write to output
+        for i in range(len(data[1])):
+            source_words = data[0][i].strip().split()
+            target_words = data[1][i].strip().split()
+            translation = []
+
+            for j in range(len(target_words)):
+                source_length = len(source_words)
+                word = target_words[j]
+
+                # found unk symbol
+                if word == unk_symbol:
+                    source_index = indices[j, i]
+
+                    if source_index >= source_length:
+                        translation.append(word)
+                        continue
+
+                    source_word = source_words[source_index]
+
+                    if heuristic and source_word in mapping:
+                        if heuristic == 1:
+                            translation.append(mapping[source_word])
+                        else:
+                            # source word begin with lower case letter
+                            if source_word.decode('utf-8')[0].islower():
+                                translation.append(mapping[source_word])
+                            else:
+                                translation.append(source_word)
+                    else:
+                        translation.append(source_word)
+
+                else:
+                    translation.append(word)
+
+            sys.stdout.write(" ".join(translation))
+            sys.stdout.write("\n")
+
+    stream.close()
+
+
 def helpinfo():
     print "usage:"
     print "\trnnsearch.py <command> [<args>]"
     print "using rnnsearch.py train --help to see training options"
     print "using rnnsearch.py translate --help to see translation options"
+    print "using rnnsearch.py replace --help to see unk replacement options"
 
 
 if __name__ == "__main__":
@@ -712,5 +850,10 @@ if __name__ == "__main__":
             sys.stderr.write("\n")
             args = parseargs_decode(sys.argv[2:])
             decode(args)
+        elif command == "replace":
+            sys.stderr.write(" ".join(sys.argv))
+            sys.stderr.write("\n")
+            args = parseargs_replace(sys.argv[2:])
+            replace(args)
         else:
             helpinfo()
