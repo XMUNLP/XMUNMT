@@ -7,8 +7,8 @@ import argparse
 
 
 def parseargs():
-    desc = "shuffle corpus"
-    parser = argparse.ArgumentParser(description=desc)
+    msg = "shuffle corpus"
+    parser = argparse.ArgumentParser(description=msg)
 
     msg = "input corpora"
     parser.add_argument("--corpus", nargs="+", required=True, help=msg)

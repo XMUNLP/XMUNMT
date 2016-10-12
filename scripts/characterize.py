@@ -28,20 +28,19 @@ def process(n1, n2, tok=None):
 
 
 def parseargs():
-    desc = "characterize corpus"
-    parser = argparse.ArgumentParser(description = desc)
+    msg = "characterize corpus"
+    parser = argparse.ArgumentParser(description=msg)
 
-    desc = "corpus"
-    parser.add_argument("--corpus", required=True, help=desc)
-    desc = "output"
-    parser.add_argument("--output", required=True, help=desc)
-    desc = "add word seperation token"
-    parser.add_argument("--token", type=str, help=desc)
+    msg = "corpus"
+    parser.add_argument("--corpus", required=True, help=msg)
+    msg = "output"
+    parser.add_argument("--output", required=True, help=msg)
+    msg = "add word seperation token"
+    parser.add_argument("--token", type=str, help=msg)
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parseargs()
-
     process(args.corpus, args.output, args.token)

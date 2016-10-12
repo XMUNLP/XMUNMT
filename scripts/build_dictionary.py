@@ -7,8 +7,8 @@ import collections
 
 
 def parseargs():
-    desc = "build dictionary using alignment files"
-    parser = argparse.ArgumentParser(description=desc)
+    msg = "build dictionary using alignment files"
+    parser = argparse.ArgumentParser(description=msg)
 
     msg = "source file"
     parser.add_argument("source", help=msg)

@@ -204,7 +204,7 @@ def parseargs_train(args):
     parser.add_argument("--maxhid", type=int, help=msg)
     # maxout number
     msg = "maxout number, default 2"
-    parser.add_argument("--maxpart", default=2, type=int, help=msg)
+    parser.add_argument("--maxpart", type=int, help=msg)
     # deepout dim
     msg = "deepout hidden dimension, default 620"
     parser.add_argument("--deephid", type=int, help=msg)

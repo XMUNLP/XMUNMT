@@ -1,0 +1,253 @@
+# convert.py
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
+
+import numpy
+import cPickle
+import argparse
+
+
+def loadvocab(file):
+    fd = open(file, "r")
+    vocab = cPickle.load(fd)
+    fd.close()
+    return vocab
+
+
+def invertvoc(vocab):
+    v = {}
+    for k, idx in vocab.iteritems():
+        v[idx] = k
+
+    return v
+
+
+def getoption():
+    option = {}
+
+    option["corpus"] = None
+    option["vocab"] = None
+
+    # model parameters
+    option["embdim"] = [620, 620]
+    option["hidden"] = [1000, 1000, 1000]
+    option["maxpart"] = 2
+    option["maxhid"] = 500
+    option["deephid"] = 620
+
+    # tuning options
+    option["alpha"] = 5e-4
+    option["batch"] = 128
+    option["momentum"] = 0.0
+    option["optimizer"] = "rmsprop"
+    option["variant"] = "graves"
+    option["norm"] = 1.0
+    option["stop"] = 0
+    option["decay"] = 0.5
+
+    # runtime information
+    option["cost"] = 0
+    option["count"] = 0
+    option["epoch"] = 0
+    option["maxepoch"] = 5
+    option["sort"] = 20
+    option["shuffle"] = False
+    option["limit"] = [50, 50]
+    option["freq"] = 1000
+    option["vfreq"] = 1000
+    option["sfreq"] = 50
+    option["seed"] = 1234
+    option["validate"] = None
+    option["ref"] = None
+
+    # beam search
+    option["beamsize"] = 10
+    option["normalize"] = False
+    option["maxlen"] = None
+    option["minlen"] = None
+
+    # special symbols
+    option["unk"] = "UNK"
+    option["eos"] = "<eos>"
+
+    return option
+
+
+def get_rnnsearch_keys():
+    keys = []
+
+    keys.append("rnnsearch/source_embedding/embedding")
+    keys.append("rnnsearch/source_embedding/bias")
+    keys.append("rnnsearch/target_embedding/embedding")
+    keys.append("rnnsearch/target_embedding/bias")
+    keys.append("rnnsearch/encoder/forward_rnn/reset_gate/weight")
+    keys.append("rnnsearch/encoder/forward_rnn/reset_gate/weight_1")
+    keys.append("rnnsearch/encoder/forward_rnn/update_gate/weight")
+    keys.append("rnnsearch/encoder/forward_rnn/update_gate/weight_1")
+    keys.append("rnnsearch/encoder/forward_rnn/candidate/weight")
+    keys.append("rnnsearch/encoder/forward_rnn/candidate/weight_1")
+    keys.append("rnnsearch/encoder/forward_rnn/candidate/bias")
+    keys.append("rnnsearch/encoder/backward_rnn/reset_gate/weight")
+    keys.append("rnnsearch/encoder/backward_rnn/reset_gate/weight_1")
+    keys.append("rnnsearch/encoder/backward_rnn/update_gate/weight")
+    keys.append("rnnsearch/encoder/backward_rnn/update_gate/weight_1")
+    keys.append("rnnsearch/encoder/backward_rnn/candidate/weight")
+    keys.append("rnnsearch/encoder/backward_rnn/candidate/weight_1")
+    keys.append("rnnsearch/encoder/backward_rnn/candidate/bias")
+    keys.append("rnnsearch/decoder/init_transform/weight")
+    keys.append("rnnsearch/decoder/init_transform/bias")
+    keys.append("rnnsearch/decoder/annotation_transform/weight")
+    keys.append("rnnsearch/decoder/state_transform/weight")
+    keys.append("rnnsearch/decoder/context_transform/weight")
+    keys.append("rnnsearch/decoder/rnn/reset_gate/weight")
+    keys.append("rnnsearch/decoder/rnn/reset_gate/weight_1")
+    keys.append("rnnsearch/decoder/rnn/reset_gate/weight_2")
+    keys.append("rnnsearch/decoder/rnn/update_gate/weight")
+    keys.append("rnnsearch/decoder/rnn/update_gate/weight_1")
+    keys.append("rnnsearch/decoder/rnn/update_gate/weight_2")
+    keys.append("rnnsearch/decoder/rnn/candidate/weight")
+    keys.append("rnnsearch/decoder/rnn/candidate/weight_1")
+    keys.append("rnnsearch/decoder/rnn/candidate/weight_2")
+    keys.append("rnnsearch/decoder/rnn/candidate/bias")
+    keys.append("rnnsearch/decoder/maxout/weight")
+    keys.append("rnnsearch/decoder/maxout/weight_1")
+    keys.append("rnnsearch/decoder/maxout/weight_2")
+    keys.append("rnnsearch/decoder/maxout/bias")
+    keys.append("rnnsearch/decoder/deepout/weight")
+    keys.append("rnnsearch/decoder/classify/weight")
+    keys.append("rnnsearch/decoder/classify/bias")
+
+    return keys
+
+
+def get_groundhog_keys():
+    keys = []
+    keys.append("W_0_enc_approx_embdr")
+    keys.append("b_0_enc_approx_embdr")
+    keys.append("W_0_dec_approx_embdr")
+    keys.append("b_0_dec_approx_embdr")
+    keys.append("W_0_enc_reset_embdr_0")
+    keys.append("R_enc_transition_0")
+    keys.append("W_0_enc_update_embdr_0")
+    keys.append("G_enc_transition_0")
+    keys.append("W_0_enc_input_embdr_0")
+    keys.append("W_enc_transition_0")
+    keys.append("b_0_enc_input_embdr_0")
+    keys.append("W_0_back_enc_reset_embdr_0")
+    keys.append("R_back_enc_transition_0")
+    keys.append("W_0_back_enc_update_embdr_0")
+    keys.append("G_back_enc_transition_0")
+    keys.append("W_0_back_enc_input_embdr_0")
+    keys.append("W_back_enc_transition_0")
+    keys.append("b_0_back_enc_input_embdr_0")
+    keys.append("W_0_dec_initializer_0")
+    keys.append("b_0_dec_initializer_0")
+    keys.append("A_dec_transition_0")
+    keys.append("B_dec_transition_0")
+    keys.append("D_dec_transition_0")
+    keys.append("W_0_dec_reset_embdr_0")
+    keys.append("W_0_dec_dec_reseter_0")
+    keys.append("R_dec_transition_0")
+    keys.append("W_0_dec_update_embdr_0")
+    keys.append("W_0_dec_dec_updater_0")
+    keys.append("G_dec_transition_0")
+    keys.append("W_0_dec_input_embdr_0")
+    keys.append("W_0_dec_dec_inputter_0")
+    keys.append("W_dec_transition_0")
+    keys.append("b_0_dec_input_embdr_0")
+    keys.append("W_0_dec_hid_readout_0")
+    keys.append("W_0_dec_prev_readout_0")
+    keys.append("W_0_dec_repr_readout")
+    keys.append("b_0_dec_hid_readout_0")
+    keys.append("W1_dec_deep_softmax")
+    keys.append("W2_dec_deep_softmax")
+    keys.append("b_dec_deep_softmax")
+
+    return keys
+
+
+def parseargs():
+    msg = "convert groudhog's model to our format"
+    parser = argparse.ArgumentParser(description=msg)
+
+    msg = "search state"
+    parser.add_argument("--state", required=True, help=msg)
+    msg = "search model"
+    parser.add_argument("--model", required=True, help=msg)
+    msg = "output"
+    parser.add_argument("--output", required=True, help=msg)
+
+    return parser.parse_args()
+
+
+def main(args):
+    fd = open(args.state)
+    state = cPickle.load(fd)
+    fd.close()
+    option = getoption()
+
+    if not state["search"]:
+        raise ValueError("only support RNNsearch architecture")
+
+    embdim = state["rank_n_approx"]
+    hidden_dim = state["dim"]
+
+    option["embdim"] = [embdim, embdim]
+    option["hidden"] = [hidden_dim, hidden_dim, hidden_dim]
+    option["maxpart"] = int(state["maxout_part"])
+    option["maxhid"] = hidden_dim / 2
+    option["deephid"] = embdim
+    option["vocab"] = [state["word_indx"], state["word_indx_trgt"]]
+
+    option["source_eos_id"] = state["null_sym_source"]
+    option["target_eos_id"] = state["null_sym_target"]
+
+    svocab = loadvocab(option["vocab"][0])
+    tvocab = loadvocab(option["vocab"][1])
+    isvocab = invertvoc(svocab)
+    itvocab = invertvoc(tvocab)
+
+    svocab[option["eos"]] = option["source_eos_id"]
+    tvocab[option["eos"]] = option["target_eos_id"]
+    isvocab[option["source_eos_id"]] = option["eos"]
+    itvocab[option["target_eos_id"]] = option["eos"]
+
+    if len(isvocab) != state["n_sym_source"]:
+        raise ValueError("source vocab size not match")
+
+    if len(itvocab) != state["n_sym_target"]:
+        raise ValueError("target vocab size not match")
+
+    option["vocabulary"] = [[svocab, isvocab], [tvocab, itvocab]]
+
+    option["unk"] = state["oov"]
+    option["batch"] = state["bs"]
+    option["limit"] = [state["seqlen"], state["seqlen"]]
+    option["sort"] = state["sort_k_batches"]
+    option["seed"] = state["seed"]
+    option["shuffle"] = state["shuffle"]
+
+    params = numpy.load(args.model)
+    params = dict(params)
+
+    if len(params) != 40:
+        raise ValueError("configuration not supported")
+
+    rkeys = get_rnnsearch_keys()
+    gkeys = get_groundhog_keys()
+
+    plist = []
+
+    for key1, key2 in zip(rkeys, gkeys):
+        plist.append((key1, params[key2]))
+
+
+    fd = open(args.output, "w")
+    cPickle.dump(option, fd)
+    cPickle.dump(plist, fd)
+    fd.close()
+
+
+if __name__ == "__main__":
+    args = parseargs()
+    main(args)
