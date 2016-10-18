@@ -31,11 +31,11 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 
 ### Training
 ```
-  python rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf \
-    --vocab zh.vocab.pkl en.vocab.pkl --model nmt --embdim 620 620 \
-    --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2 \
-    --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234 \
-    --freq 1000 --vfreq 1500 --sfreq 50 --sort 20 --validate nist02.src \
+  python rnnsearch.py train --corpus zh.txt.shuf en.txt.shuf
+    --vocab zh.vocab.pkl en.vocab.pkl --model nmt --embdim 620 620
+    --hidden 1000 1000 1000 --maxhid 500 --deephid 620 --maxpart 2
+    --alpha 5e-4 --norm 1.0 --batch 128 --maxepoch 5 --seed 1234
+    --freq 1000 --vfreq 1500 --sfreq 50 --sort 20 --validate nist02.src
     --ref nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3
   ```
 ### Decoding
@@ -44,8 +44,8 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 ```
 ### UNK replacement
 ```
-  python rnnsearch.py replace --model nmt.best.pkl --text input translation \
-    --dictionary dict.zh-en > newtranslation
+  python rnnsearch.py replace --model nmt.best.pkl --text input translation
+                              --dictionary dict.zh-en > newtranslation
 ```
 ### Resume training
 ```
@@ -56,6 +56,6 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 Models trained by GroundHog can be converted to our format using convert.py,
 only support RNNsearch architecture
 ```
-python scripts/convert.py --state search_state.pkl --model search_model.npz \
+python scripts/convert.py --state search_state.pkl --model search_model.npz
                           --output nmt.pkl
 ```

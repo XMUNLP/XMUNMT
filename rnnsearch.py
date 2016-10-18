@@ -375,6 +375,7 @@ def getoption():
     option["seed"] = 1234
     option["validate"] = None
     option["ref"] = None
+    option["bleu"] = 0.0
 
     # beam search
     option["beamsize"] = 10
@@ -593,7 +594,7 @@ def train(args):
     doption["maxlen"] = option["maxlen"]
     doption["minlen"] = option["minlen"]
 
-    best_score = 0.0
+    best_score = 0.0 if "bleu" not in option else option["bleu"]
     unk_symbol = option["unk"]
     eos_symbol = option["eos"]
 
@@ -623,6 +624,7 @@ def train(args):
                 model.option = option
                 model.option["shared"] = svars
                 model.option["indices"] = reader.get_indices()
+                model.option["bleu"] = best_score
                 serialize(autoname, model)
 
             if count % option["vfreq"] == 0:
@@ -635,6 +637,7 @@ def train(args):
                         model.option = option
                         model.option["shared"] = None
                         model.option["indices"] = None
+                        model.option["bleu"] = best_score
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
@@ -664,6 +667,7 @@ def train(args):
                 model.option = option
                 model.option["shared"] = None
                 model.option["indices"] = None
+                model.option["bleu"] = best_score
                 serialize(bestname, model)
 
         print "averaged cost: ", totcost / option["count"]
@@ -684,6 +688,7 @@ def train(args):
         model.option = option
         model.option["shared"] = svars
         model.option["indices"] = reader.get_indices()
+        model.option["bleu"] = best_score
         serialize(autoname, model)
 
     print "best(bleu): %2.4f" % best_score
