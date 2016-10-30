@@ -1,5 +1,5 @@
 # RNNsearch
-An implementation of RNNsearch using theano, the implementation is the same
+An implementation of RNNsearch using Theano, the implementation is the same
 with [GroundHog](https://github.com/lisa-groundhog/GroundHog)
 
 
@@ -48,7 +48,7 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 ```
 ### UNK replacement
 ```
-  python rnnsearch.py replace --model nmt.best.pkl --text input translation \
+  python rnnsearch.py replace --model nmt.best.pkl --text input translation
     --dictionary dict.zh-en > newtranslation
 ```
 ### Resume training
@@ -60,6 +60,6 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 Models trained by GroundHog can be converted to our format using convert.py,
 only support RNNsearch architecture
 ```
-python scripts/convert.py --state search_state.pkl --model search_model.npz \
+python scripts/convert.py --state search_state.pkl --model search_model.npz
                           --output nmt.pkl
 ```

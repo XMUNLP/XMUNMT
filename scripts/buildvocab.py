@@ -124,23 +124,23 @@ def create_dictionary(name, lim=0):
 
 
 def parseargs():
-    desc = "build vocabulary"
-    parser = argparse.ArgumentParser(description = desc)
+    msg = "build vocabulary"
+    parser = argparse.ArgumentParser(description=msg)
 
-    desc = "corpus"
-    parser.add_argument("--corpus", required=True, help=desc)
-    desc = "output"
-    parser.add_argument("--output", required=True, help=desc)
-    desc = "limit"
-    parser.add_argument("--limit", default=0, type=int, help=desc)
-    desc = "character mode"
-    parser.add_argument("--char", action="store_true", help=desc)
-    desc = "sort by alphabet"
-    parser.add_argument("--alpha", action="store_true", help=desc)
-    desc = "add token"
-    parser.add_argument("--token", type=str, help=desc)
-    desc = "compatible with groundhog"
-    parser.add_argument("--groundhog", action="store_true", help=desc)
+    msg = "corpus"
+    parser.add_argument("--corpus", required=True, help=msg)
+    msg = "output"
+    parser.add_argument("--output", required=True, help=msg)
+    msg = "limit"
+    parser.add_argument("--limit", default=0, type=int, help=msg)
+    msg = "character mode"
+    parser.add_argument("--char", action="store_true", help=msg)
+    msg = "sort by alphabet"
+    parser.add_argument("--alpha", action="store_true", help=msg)
+    msg = "add token"
+    parser.add_argument("--token", type=str, help=msg)
+    msg = "compatible with groundhog"
+    parser.add_argument("--groundhog", action="store_true", help=msg)
 
     return parser.parse_args()
 
