@@ -13,7 +13,7 @@ import argparse
 from metric import bleu
 from optimizer import optimizer
 from data import textreader, textiterator, processdata, getlen
-from model.rnnsearch import rnnsearch, beamsearch
+from model.rnnsearch import rnnsearch, beamsearch, batchsample
 
 
 def loadvocab(file):
@@ -53,11 +53,17 @@ def serialize(name, model):
     fd = open(name, "w")
     option = model.option
     params = model.parameter
+    names = [p.name for p in params]
+    vals = dict([(p.name, p.get_value()) for p in params])
 
-    pval = [(p.name, p.get_value()) for p in params]
+    if option["indices"] != None:
+        vals["indices"] = option["indices"]
+        option["indices"] = None
 
     cPickle.dump(option, fd)
-    cPickle.dump(pval, fd)
+    cPickle.dump(names, fd)
+    # compress
+    numpy.savez(fd, **vals)
 
     fd.close()
 
@@ -66,14 +72,20 @@ def serialize(name, model):
 def loadmodel(name):
     fd = open(name, "r")
     option = cPickle.load(fd)
-    params = cPickle.load(fd)
+    names = cPickle.load(fd)
+    vals = dict(numpy.load(fd))
+
+    params = [vals[n] for n in names]
+
+    if "indices" in vals:
+        option["indices"] = vals["indices"]
 
     return option, params
 
 
 def set_variables(params, values):
     for p, v in zip(params, values):
-        p.set_value(v[1])
+        p.set_value(v)
 
 
 def loadreferences(names, case=True):
@@ -97,36 +109,6 @@ def loadreferences(names, case=True):
     stream.close()
 
     return references
-
-
-def validate(scorpus, tcorpus, model, batch):
-
-    if not scorpus or not tcorpus:
-        return None
-
-    reader = textreader([scorpus, tcorpus])
-    stream = textiterator(reader, [batch, batch])
-    svocabs, tvocabs = model.vocabulary
-    unk_symbol = model.option["unk"]
-    eos_symbol = model.option["eos"]
-
-    totcost = 0.0
-    count = 0
-
-    for data in stream:
-        xdata, xmask = processdata(data[0], svocabs[0], unk_symbol, eos_symbol)
-        ydata, ymask = processdata(data[1], tvocabs[0], unk_symbol, eos_symbol)
-        cost = model.compute(xdata, xmask, ydata, ymask)
-        cost = cost[0]
-        cost = cost * ymask.shape[1] / ymask.sum()
-        totcost += cost / math.log(2)
-        count = count + 1
-
-    stream.close()
-
-    bpc = totcost / count
-
-    return bpc
 
 
 def translate(model, corpus, **opt):
@@ -183,67 +165,49 @@ def parseargs_train(args):
     usage = "rnnsearch.py train [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
 
-    # training corpus
+    # corpus and vocabulary
     msg = "source and target corpus"
     parser.add_argument("--corpus", nargs=2, help=msg)
-    # training vocabulary
     msg = "source and target vocabulary"
     parser.add_argument("--vocab", nargs=2, help=msg)
-    # output model
     msg = "model name to save or saved model to initalize, required"
     parser.add_argument("--model", required=True, help=msg)
 
-    # embedding size
+    # model parameters
     msg = "source and target embedding size, default 620"
     parser.add_argument("--embdim", nargs=2, type=int, help=msg)
-    # hidden size
     msg = "source, target and alignment hidden size, default 1000"
     parser.add_argument("--hidden", nargs=3, type=int, help=msg)
-    # maxout dim
     msg = "maxout hidden dimension, default 500"
     parser.add_argument("--maxhid", type=int, help=msg)
-    # maxout number
     msg = "maxout number, default 2"
     parser.add_argument("--maxpart", type=int, help=msg)
-    # deepout dim
     msg = "deepout hidden dimension, default 620"
     parser.add_argument("--deephid", type=int, help=msg)
-
-    # epoch
     msg = "maximum training epoch, default 5"
     parser.add_argument("--maxepoch", type=int, help=msg)
-    # learning rate
+
+    # tuning options
     msg = "learning rate, default 5e-4"
     parser.add_argument("--alpha", type=float, help=msg)
-    # momentum
     msg = "momentum, default 0.0"
     parser.add_argument("--momentum", type=float, help=msg)
-    # batch
     msg = "batch size, default 128"
     parser.add_argument("--batch", type=int, help=msg)
-    # training algorhtm
     msg = "optimizer, default rmsprop"
     parser.add_argument("--optimizer", type=str, help=msg)
-    # gradient renormalization
-    msg = "gradient renormalization, default 1.0"
+    msg = "gradient clipping, default 1.0"
     parser.add_argument("--norm", type=float, help=msg)
-    # early stopping
     msg = "early stopping iteration, default 0"
     parser.add_argument("--stop", type=int, help=msg)
-    # decay factor
     msg = "decay factor, default 0.5"
     parser.add_argument("--decay", type=float, help=msg)
-    # random seed
+
+    # validation
     msg = "random seed, default 1234"
     parser.add_argument("--seed", type=int, help=msg)
-
-    # compute bit per cost
-    msg = "compute bit per cost on validate dataset"
-    parser.add_argument("--bpc", action="store_true", help=msg)
-    # validate data
     msg = "validate dataset"
     parser.add_argument("--validate", type=str, help=msg)
-    # reference
     msg = "reference data"
     parser.add_argument("--ref", type=str, nargs="+", help=msg)
 
@@ -256,28 +220,26 @@ def parseargs_train(args):
     parser.add_argument("--limit", type=int, nargs='+', help=msg)
 
 
-    # save frequency
+    # control frequency
     msg = "save frequency, default 1000"
     parser.add_argument("--freq", type=int, help=msg)
-    # sample frequency
     msg = "sample frequency, default 50"
     parser.add_argument("--sfreq", type=int, help=msg)
-    # validate frequency
     msg = "validate frequency, default 1000"
     parser.add_argument("--vfreq", type=int, help=msg)
 
     # control beamsearch
     msg = "beam size, default 10"
     parser.add_argument("--beamsize", type=int, help=msg)
-    # normalize
     msg = "normalize probability by the length of cadidate sentences"
     parser.add_argument("--normalize", type=int, help=msg)
-    # max length
     msg = "max translation length"
     parser.add_argument("--maxlen", type=int, help=msg)
-    # min length
     msg = "min translation length"
     parser.add_argument("--minlen", type=int, help=msg)
+
+    msg = "reset count"
+    parser.add_argument("--reset", type=int, help=msg)
 
     return parser.parse_args(args)
 
@@ -287,24 +249,37 @@ def parseargs_decode(args):
     usage = "rnnsearch.py translate [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
 
-    # input model
+
     msg = "trained model"
     parser.add_argument("--model", nargs="+", required=True, help=msg)
-    # beam size
     msg = "beam size"
     parser.add_argument("--beamsize", default=10, type=int, help=msg)
-    # normalize
     msg = "normalize probability by the length of cadidate sentences"
     parser.add_argument("--normalize", action="store_true", help=msg)
-    # arithmetic
     msg = "use arithmetic mean instead of geometric mean"
     parser.add_argument("--arithmetic", action="store_true", help=msg)
+    msg = "max translation length"
+    parser.add_argument("--maxlen", type=int, help=msg)
+    msg = "min translation length"
+    parser.add_argument("--minlen", type=int, help=msg)
+
+    return parser.parse_args(args)
+
+
+def parseargs_sample(args):
+    msg = "sample sentence from exsiting nmt model"
+    usage = "rnnsearch.py sample [<args>] [-h | --help]"
+    parser = argparse.ArgumentParser(description=msg, usage=usage)
+
+    # input model
+    msg = "trained model"
+    parser.add_argument("--model", required=True, help=msg)
+    # batch size
+    msg = "sample batch examples"
+    parser.add_argument("--batch", default=1, type=int, help=msg)
     # max length
     msg = "max translation length"
     parser.add_argument("--maxlen", type=int, help=msg)
-    # min length
-    msg = "min translation length"
-    parser.add_argument("--minlen", type=int, help=msg)
 
     return parser.parse_args(args)
 
@@ -314,22 +289,16 @@ def parseargs_replace(args):
     usage = "rnnsearch.py replace [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
 
-    # input model
     msg = "trained models"
     parser.add_argument("--model", required=True, nargs="+", help=msg)
-    # texts
     msg = "source text and translation file"
     parser.add_argument("--text", required=True, nargs=2, help=msg)
-    # dictionary
     msg = "replacement dictionary"
     parser.add_argument("--dictionary", required=True, type=str, help=msg)
-    # heuristic
     msg = "replacement heuristic (0: copy, 1: replace, 2: heuristic replace)"
     parser.add_argument("--heuristic", type=int, default=1, help=msg)
-    # batch
     msg = "batch size"
     parser.add_argument("--batch", type=int, default=128, help=msg)
-    # arithmetic
     msg = "use arithmetic mean instead of geometric mean"
     parser.add_argument("--arithmetic", action="store_true", help=msg)
 
@@ -362,8 +331,9 @@ def getoption():
     option["decay"] = 0.5
 
     # runtime information
-    option["cost"] = 0
-    option["count"] = 0
+    option["cost"] = 0.0
+    # batch/reader count
+    option["count"] = [0, 0]
     option["epoch"] = 0
     option["maxepoch"] = 5
     option["sort"] = 20
@@ -376,6 +346,7 @@ def getoption():
     option["validate"] = None
     option["ref"] = None
     option["bleu"] = 0.0
+    option["indices"] = None
 
     # beam search
     option["beamsize"] = 10
@@ -560,13 +531,17 @@ def train(args):
     stream = textiterator(reader, [batch, batch * sortk], processor,
                           option["limit"], option["sort"])
 
-    if shuffle and "indices" in option and option["indices"] is not None:
+    if shuffle and option["indices"] is not None:
         reader.set_indices(option["indices"])
 
-    skipstream(stream, option["count"])
+    if args.reset:
+        option["count"] = [0, 0]
+        option["epoch"] = 0
+        option["cost"] = 0.0
+
+    skipstream(reader, option["count"][1])
     epoch = option["epoch"]
     maxepoch = option["maxepoch"]
-    option["model"] = "rnnsearch"
 
     model = rnnsearch(**option)
 
@@ -583,7 +558,6 @@ def train(args):
     toption["variant"] = option["variant"]
     toption["constraint"] = ("norm", option["norm"])
     toption["norm"] = True
-    toption["initialize"] = option["shared"] if "shared" in option else False
     trainer = optimizer(model, **toption)
     alpha = option["alpha"]
 
@@ -594,37 +568,34 @@ def train(args):
     doption["maxlen"] = option["maxlen"]
     doption["minlen"] = option["minlen"]
 
-    best_score = 0.0 if "bleu" not in option else option["bleu"]
-    unk_symbol = option["unk"]
-    eos_symbol = option["eos"]
+    best_score = option["bleu"]
+    unk_sym = option["unk"]
+    eos_sym = option["eos"]
+    count = option["count"][0]
+    totcost = option["cost"]
 
     for i in range(epoch, maxepoch):
-        totcost = 0.0
         for data in stream:
-            xdata, xmask = processdata(data[0], svocab, unk_symbol, eos_symbol)
-            ydata, ymask = processdata(data[1], tvocab, unk_symbol, eos_symbol)
+            xdata, xmask = processdata(data[0], svocab, unk_sym, eos_sym)
+            ydata, ymask = processdata(data[1], tvocab, unk_sym, eos_sym)
 
             t1 = time.time()
             cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
             trainer.update(alpha = alpha)
             t2 = time.time()
 
-            option["count"] += 1
-            count = option["count"]
+            count += 1
 
             cost = cost * ymask.shape[1] / ymask.sum()
             totcost += cost / math.log(2)
             print i + 1, count, cost, norm, t2 - t1
 
-            option["cost"] = totcost
-
-            # save model
+            # autosave
             if count % option["freq"] == 0:
-                svars = [p.get_value() for p in trainer.parameter]
-                model.option = option
-                model.option["shared"] = svars
                 model.option["indices"] = reader.get_indices()
                 model.option["bleu"] = best_score
+                model.option["cost"] = totcost
+                model.option["count"] = [count, reader.count]
                 serialize(autoname, model)
 
             if count % option["vfreq"] == 0:
@@ -634,10 +605,10 @@ def train(args):
                     print "bleu: %2.4f" % bleu_score
                     if bleu_score > best_score:
                         best_score = bleu_score
-                        model.option = option
-                        model.option["shared"] = None
-                        model.option["indices"] = None
+                        model.option["indices"] = reader.get_indices()
                         model.option["bleu"] = best_score
+                        model.option["cost"] = totcost
+                        model.option["count"] = [count, reader.count]
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
@@ -664,31 +635,30 @@ def train(args):
             print "iter: %d, bleu: %2.4f" % (i + 1, bleu_score)
             if bleu_score > best_score:
                 best_score = bleu_score
-                model.option = option
-                model.option["shared"] = None
-                model.option["indices"] = None
+                model.option["indices"] = reader.get_indices()
                 model.option["bleu"] = best_score
+                model.option["cost"] = totcost
+                model.option["count"] = [count, reader.count]
                 serialize(bestname, model)
 
-        print "averaged cost: ", totcost / option["count"]
+        print "averaged cost: ", totcost / count
         print "--------------------------------------------------"
 
         # early stopping
         if i + 1 >= option["stop"]:
             alpha = alpha * option["decay"]
 
+        count = 0
+        totcost = 0.0
         stream.reset()
-        option["epoch"] = i + 1
-        option["count"] = 0
-        option["alpha"] = alpha
-        model.option = option
 
         # update autosave
-        svars = [p.get_value() for p in trainer.parameter]
-        model.option = option
-        model.option["shared"] = svars
+        model.option["epoch"] = i + 1
+        model.option["alpha"] = alpha
         model.option["indices"] = reader.get_indices()
         model.option["bleu"] = best_score
+        model.option["cost"] = totcost
+        model.option["count"] = [0, 0]
         serialize(autoname, model)
 
     print "best(bleu): %2.4f" % best_score
@@ -746,6 +716,49 @@ def decode(args):
         count = count + 1
         sys.stderr.write(str(count) + " ")
         sys.stderr.write(str(score) + " " + str(t2 - t1) + "\n")
+
+
+def sample(args):
+    option, values = loadmodel(args.model)
+    model = rnnsearch(**option)
+    set_variables(model.parameter, values)
+
+    svocabs, tvocabs = model.option["vocabulary"]
+    unk_symbol = model.option["unk"]
+    eos_symbol = model.option["eos"]
+
+    svocab, isvocab = svocabs
+    tvocab, itvocab = tvocabs
+
+    count = 0
+
+    batch = args.batch
+
+    while True:
+        line = sys.stdin.readline()
+
+        if line == "":
+            break
+
+        data = [line]
+        seq, mask = processdata(data, svocab, unk_symbol, eos_symbol)
+        t1 = time.time()
+        seq = numpy.repeat(seq, batch, 1)
+        mask = numpy.repeat(mask, batch, 1)
+        tlist = batchsample(model, seq, mask, maxlen=args.maxlen)
+        t2 = time.time()
+
+        count = count + 1
+
+        if len(tlist) == 0:
+            sys.stdout.write("\n")
+        else:
+            for i in range(min(args.batch, len(tlist))):
+                example = tlist[i]
+                sys.stdout.write(" ".join(example))
+                sys.stdout.write("\n")
+
+        sys.stderr.write(str(count) + " " + str(t2 - t1) + "\n")
 
 
 # unk replacement
@@ -835,9 +848,10 @@ def replace(args):
 def helpinfo():
     print "usage:"
     print "\trnnsearch.py <command> [<args>]"
-    print "using rnnsearch.py train --help to see training options"
-    print "using rnnsearch.py translate --help to see translation options"
-    print "using rnnsearch.py replace --help to see unk replacement options"
+    print "use 'rnnsearch.py train --help' to see training options"
+    print "use 'rnnsearch.py translate' --help to see translation options"
+    print "use 'rnnsearch.py sample' --help to see sampling options"
+    print "use 'rnnsearch.py replace' --help to see unk replacement options"
 
 
 if __name__ == "__main__":
@@ -855,6 +869,11 @@ if __name__ == "__main__":
             sys.stderr.write("\n")
             args = parseargs_decode(sys.argv[2:])
             decode(args)
+        elif command == "sample":
+            sys.stderr.write(" ".join(sys.argv))
+            sys.stderr.write("\n")
+            args = parseargs_sample(sys.argv[2:])
+            sample(args)
         elif command == "replace":
             sys.stderr.write(" ".join(sys.argv))
             sys.stderr.write("\n")

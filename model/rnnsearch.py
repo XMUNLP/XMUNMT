@@ -4,6 +4,7 @@
 
 import numpy
 import theano
+import theano.sandbox.rng_mrg
 
 from nn import gru, gru_config
 from nn import linear, linear_config
@@ -322,7 +323,7 @@ class rnnsearch:
         params.extend(rnn_encoder.parameter)
         params.extend(rnn_decoder.parameter)
 
-        def build_training():
+        def training_graph():
             xseq = theano.tensor.imatrix()
             xmask = theano.tensor.matrix()
             yseq = theano.tensor.imatrix()
@@ -343,73 +344,7 @@ class rnnsearch:
 
             return [xseq, xmask, yseq, ymask], [cost]
 
-        def build_sampling():
-
-            def encode():
-                xseq = theano.tensor.imatrix()
-                xmask = theano.tensor.matrix()
-
-                xemb = source_embedding(xseq)
-                initstate = theano.tensor.zeros((xseq.shape[1], shdim))
-                annotation = rnn_encoder(xemb, xmask, initstate)
-
-                return theano.function([xseq, xmask], annotation)
-
-            def compute_initstate():
-                annotation = theano.tensor.tensor3()
-
-                # initstate, mapped_annotation
-                outputs = rnn_decoder.compute_initstate(annotation)
-
-                return theano.function([annotation], outputs)
-
-            def compute_context():
-                state = theano.tensor.matrix()
-                xmask = theano.tensor.matrix()
-                annotation = theano.tensor.tensor3()
-                mannotation = theano.tensor.tensor3()
-
-                inputs = [state, xmask, annotation, mannotation]
-                alpha, context = rnn_decoder.compute_context(*inputs)
-
-                return theano.function(inputs, [context, alpha])
-
-            def compute_probability():
-                y = theano.tensor.ivector()
-                state = theano.tensor.matrix()
-                context = theano.tensor.matrix()
-
-                # 0 for initial index
-                cond = theano.tensor.neq(y, 0)
-                yemb = target_embedding(y)
-                # zeros out embedding if y is 0
-                yemb = yemb * cond[:, None]
-                probs = rnn_decoder.compute_probability(yemb, state, context)
-
-                return theano.function([y, state, context], probs)
-
-            def compute_state():
-                y = theano.tensor.ivector()
-                ymask = theano.tensor.vector()
-                state = theano.tensor.matrix()
-                context = theano.tensor.matrix()
-
-                yemb = target_embedding(y)
-                inputs = [yemb, ymask, state, context]
-                new_state = rnn_decoder.compute_state(*inputs)
-
-                return theano.function([y, ymask, state, context], new_state)
-
-            functions = []
-            functions.append(encode())
-            functions.append(compute_initstate())
-            functions.append(compute_context())
-            functions.append(compute_probability())
-            functions.append(compute_state())
-
-            return functions
-
-        def build_attention():
+        def attention_graph():
             xseq = theano.tensor.imatrix()
             xmask = theano.tensor.matrix()
             yseq = theano.tensor.imatrix()
@@ -423,10 +358,123 @@ class rnnsearch:
             alpha = rnn_decoder.compute_attention_score(yemb, xmask, ymask,
                                                         annotation)
 
-            return theano.function([xseq, xmask, yseq, ymask], alpha)
+            return [xseq, xmask, yseq, ymask], alpha
 
-        train_inputs, train_outputs = build_training()
-        functions = build_sampling()
+        def sampling_graph():
+            seed = option["seed"]
+            seed_rng = numpy.random.RandomState(numpy.random.randint(seed))
+            tseed = seed_rng.randint(numpy.iinfo(numpy.int32).max)
+            stream = theano.sandbox.rng_mrg.MRG_RandomStreams(tseed)
+
+            xseq = theano.tensor.imatrix()
+            xmask = theano.tensor.matrix()
+            maxlen = theano.tensor.iscalar()
+
+            batch = xseq.shape[1]
+            xemb = source_embedding(xseq)
+            initstate = theano.tensor.zeros([batch, shdim])
+
+            annot = rnn_encoder(xemb, xmask, initstate)
+
+            ymask = theano.tensor.ones([batch])
+            istate, mannot = rnn_decoder.compute_initstate(annot)
+
+            def sample_step(pemb, state, xmask, ymask, annot, mannot):
+                alpha, context = rnn_decoder.compute_context(state, xmask,
+                                                             annot, mannot)
+                probs = rnn_decoder.compute_probability(pemb, state, context)
+                next_words = stream.multinomial(pvals=probs).argmax(axis=1)
+                yemb = target_embedding(next_words)
+                next_state = rnn_decoder.compute_state(yemb, ymask, state,
+                                                       context)
+                return [next_words, yemb, next_state]
+
+            iemb = theano.tensor.zeros([batch, tedim])
+
+            seqs = []
+            outputs_info = [None, iemb, istate]
+            nonseqs = [xmask, ymask, annot, mannot]
+
+            outputs, u = theano.scan(sample_step, seqs, outputs_info,
+                                     nonseqs, n_steps=maxlen)
+
+            return [xseq, xmask, maxlen], outputs[0], u
+
+        # for beamsearch
+        def encoding_graph():
+            xseq = theano.tensor.imatrix()
+            xmask = theano.tensor.matrix()
+
+            xemb = source_embedding(xseq)
+            initstate = theano.tensor.zeros((xseq.shape[1], shdim))
+            annotation = rnn_encoder(xemb, xmask, initstate)
+
+            return [xseq, xmask], annotation
+
+        def initial_state_graph():
+            annotation = theano.tensor.tensor3()
+
+            # initstate, mapped_annotation
+            outputs = rnn_decoder.compute_initstate(annotation)
+
+            return [annotation], outputs
+
+        def context_graph():
+            state = theano.tensor.matrix()
+            xmask = theano.tensor.matrix()
+            annotation = theano.tensor.tensor3()
+            mannotation = theano.tensor.tensor3()
+
+            inputs = [state, xmask, annotation, mannotation]
+            alpha, context = rnn_decoder.compute_context(*inputs)
+
+            return inputs, [context, alpha]
+
+        def probability_graph():
+            y = theano.tensor.ivector()
+            state = theano.tensor.matrix()
+            context = theano.tensor.matrix()
+
+            # 0 for initial index
+            cond = theano.tensor.neq(y, 0)
+            yemb = target_embedding(y)
+            # zeros out embedding if y is 0
+            yemb = yemb * cond[:, None]
+            probs = rnn_decoder.compute_probability(yemb, state, context)
+
+            return [y, state, context], probs
+
+        def state_graph():
+            y = theano.tensor.ivector()
+            ymask = theano.tensor.vector()
+            state = theano.tensor.matrix()
+            context = theano.tensor.matrix()
+
+            yemb = target_embedding(y)
+            inputs = [yemb, ymask, state, context]
+            new_state = rnn_decoder.compute_state(*inputs)
+
+            return [y, ymask, state, context], new_state
+
+        def compile_function(graph_fn):
+            outputs = graph_fn()
+
+            if len(outputs) == 2:
+                inputs, outputs = outputs
+                return theano.function(inputs, outputs)
+            else:
+                inputs, outputs, updates = outputs
+                return theano.function(inputs, outputs, updates=updates)
+
+
+        train_inputs, train_outputs = training_graph()
+
+        search_fn = []
+        search_fn.append(compile_function(encoding_graph))
+        search_fn.append(compile_function(initial_state_graph))
+        search_fn.append(compile_function(context_graph))
+        search_fn.append(compile_function(probability_graph))
+        search_fn.append(compile_function(state_graph))
 
         self.name = scope
         self.config = config
@@ -436,8 +484,9 @@ class rnnsearch:
         self.inputs = train_inputs
         self.outputs = train_outputs
         self.updates = []
-        self.sample = functions
-        self.attention = build_attention()
+        self.search = search_fn
+        self.sampler = compile_function(sampling_graph)
+        self.attention = compile_function(attention_graph)
 
 
 # based on groundhog's impelmentation
@@ -452,7 +501,7 @@ def beamsearch(models, xseq, **option):
         models = [models]
 
     num_models = len(models)
-    functions = [model.sample for model in models]
+    functions = [model.search for model in models]
 
     vocabulary = models[0].option["vocabulary"]
     eos = models[0].option["eos"]
@@ -605,3 +654,42 @@ def beamsearch(models, xseq, **option):
         translations.append((trans, cost))
 
     return translations
+
+
+def batchsample(model, xseq, xmask, **option):
+    add_if_not_exsit(option, "maxlen", None)
+    maxlen = option["maxlen"]
+
+    sampler = model.sampler
+
+    vocabulary = model.option["vocabulary"]
+    eos = model.option["eos"]
+    vocab = vocabulary[1][1]
+    eosid = vocabulary[1][0][eos]
+
+    if maxlen == None:
+        maxlen = int(len(xseq) * 1.5)
+
+    words = sampler(xseq, xmask, maxlen)
+    trans = words.astype("int32")
+
+    samples = []
+
+    for i in range(trans.shape[1]):
+        example = trans[:, i]
+        # remove <eos> symbol
+        index = -1
+
+        for i in range(len(example)):
+            if example[i] == eosid:
+                index = i
+                break
+
+        if index > 0:
+            example = example[:index]
+
+        example = map(lambda x: vocab[x], example)
+
+        samples.append(example)
+
+    return samples

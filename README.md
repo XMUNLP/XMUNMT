@@ -42,10 +42,14 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 ```
   python rnnsearch.py translate --model nmt.best.pkl < input > translation
 ```
+### Sampling
+```
+  python rnnsearch.py sample --model nmt.best.pkl < input > examples
+```
 ### UNK replacement
 ```
-  python rnnsearch.py replace --model nmt.best.pkl --text input translation
-                              --dictionary dict.zh-en > newtranslation
+  python rnnsearch.py replace --model nmt.best.pkl --text input translation \
+    --dictionary dict.zh-en > newtranslation
 ```
 ### Resume training
 ```
@@ -56,6 +60,6 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
 Models trained by GroundHog can be converted to our format using convert.py,
 only support RNNsearch architecture
 ```
-python scripts/convert.py --state search_state.pkl --model search_model.npz
+python scripts/convert.py --state search_state.pkl --model search_model.npz \
                           --output nmt.pkl
 ```

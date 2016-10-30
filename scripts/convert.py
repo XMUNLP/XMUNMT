@@ -59,6 +59,8 @@ def getoption():
     option["seed"] = 1234
     option["validate"] = None
     option["ref"] = None
+    option["bleu"] = 0.0
+    option["indices"] = None
 
     # beam search
     option["beamsize"] = 10
@@ -122,6 +124,7 @@ def get_rnnsearch_keys():
 
 def get_groundhog_keys():
     keys = []
+
     keys.append("W_0_enc_approx_embdr")
     keys.append("b_0_enc_approx_embdr")
     keys.append("W_0_dec_approx_embdr")
@@ -236,15 +239,15 @@ def main(args):
     rkeys = get_rnnsearch_keys()
     gkeys = get_groundhog_keys()
 
-    plist = []
+    pval = {}
 
     for key1, key2 in zip(rkeys, gkeys):
-        plist.append((key1, params[key2]))
-
+        pval[key1] = params[key2]
 
     fd = open(args.output, "w")
     cPickle.dump(option, fd)
-    cPickle.dump(plist, fd)
+    cPickle.dump(rkeys, fd)
+    numpy.savez(fd, **pval)
     fd.close()
 
 
