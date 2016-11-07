@@ -685,7 +685,7 @@ def batchsample(model, xseq, xmask, **option):
                 index = i
                 break
 
-        if index > 0:
+        if index >= 0:
             example = example[:index]
 
         example = map(lambda x: vocab[x], example)

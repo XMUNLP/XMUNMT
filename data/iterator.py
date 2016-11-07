@@ -69,6 +69,10 @@ class textiterator:
                         if not self.limit[i]:
                             continue
 
+                        if self.processor[i](new_data[i]) == 0:
+                            exceed_lim = True
+                            break
+
                         if self.processor[i](new_data[i]) > self.limit[i]:
                             exceed_lim = True
                             break
