@@ -16,6 +16,8 @@ class gru_config(config):
     * dtype: str, default theano.config.floatX
     * scope: str, default "gru"
     * concat: bool, True to concat weight matrices
+    * complement: bool, True to change update gate u to 1 - u,
+    *             so the update rule changed to u * h + (1 - u) * c
     * activation: activation function, default tanh
     * gates: feedforward_config, config behavior of gates
     * reset_gate: feedforward_config, config behavior of reset gate
@@ -27,6 +29,7 @@ class gru_config(config):
         self.dtype = get_or_default(kwargs, "dtype", theano.config.floatX)
         self.scope = get_or_default(kwargs, "scope", "gru")
         self.concat = get_or_default(kwargs, "concat", False)
+        self.complement = False
         self.activation = get_or_default(kwargs, "activation",
                                          theano.tensor.tanh)
         self.gates = feedforward_config(dtype=self.dtype, scope="gates")
@@ -44,6 +47,7 @@ class gru:
         scope = config.scope
         concat = config.concat
         activation = config.activation
+        complement = config.complement
 
         if not isinstance(input_size, (list, tuple)):
             input_size = [input_size]
@@ -95,7 +99,10 @@ class gru:
                 r, u = theano.tensor.split(r_u, (size, size), 2, -1)
                 c = activation(transform(x + [r * h]))
 
-            y = (1.0 - u) * h + u * c
+            if complement:
+                y = u * h + (1.0 - u) * c
+            else:
+                y = (1.0 - u) * h + u * c
 
             return y, y
 

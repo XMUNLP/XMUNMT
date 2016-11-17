@@ -206,8 +206,8 @@ def parseargs_train(args):
     # validation
     msg = "random seed, default 1234"
     parser.add_argument("--seed", type=int, help=msg)
-    msg = "validate dataset"
-    parser.add_argument("--validate", type=str, help=msg)
+    msg = "validation dataset"
+    parser.add_argument("--validation", type=str, help=msg)
     msg = "reference data"
     parser.add_argument("--ref", type=str, nargs="+", help=msg)
 
@@ -225,7 +225,7 @@ def parseargs_train(args):
     parser.add_argument("--freq", type=int, help=msg)
     msg = "sample frequency, default 50"
     parser.add_argument("--sfreq", type=int, help=msg)
-    msg = "validate frequency, default 1000"
+    msg = "validation frequency, default 1000"
     parser.add_argument("--vfreq", type=int, help=msg)
 
     # control beamsearch
@@ -343,7 +343,7 @@ def getoption():
     option["vfreq"] = 1000
     option["sfreq"] = 50
     option["seed"] = 1234
-    option["validate"] = None
+    option["validation"] = None
     option["ref"] = None
     option["bleu"] = 0.0
     option["indices"] = None
@@ -422,7 +422,7 @@ def override(option, args):
     override_if_not_none(option, args, "decay")
 
     # runtime information
-    override_if_not_none(option, args, "validate")
+    override_if_not_none(option, args, "validation")
     override_if_not_none(option, args, "ref")
     override_if_not_none(option, args, "freq")
     override_if_not_none(option, args, "vfreq")
@@ -465,7 +465,7 @@ def print_option(option):
     print "stop:", option["stop"]
     print "decay:", option["decay"]
 
-    print "validate:", option["validate"]
+    print "validation:", option["validation"]
     print "ref:", option["ref"]
     print "freq:", option["freq"]
     print "vfreq:", option["vfreq"]
@@ -599,8 +599,8 @@ def train(args):
                 serialize(autoname, model)
 
             if count % option["vfreq"] == 0:
-                if option["validate"] and references:
-                    trans = translate(model, option["validate"], **doption)
+                if option["validation"] and references:
+                    trans = translate(model, option["validation"], **doption)
                     bleu_score = bleu(trans, references)
                     print "bleu: %2.4f" % bleu_score
                     if bleu_score > best_score:
@@ -630,8 +630,8 @@ def train(args):
 
         print "--------------------------------------------------"
 
-        if option["validate"] and references:
-            trans = translate(model, option["validate"], **doption)
+        if option["validation"] and references:
+            trans = translate(model, option["validation"], **doption)
             bleu_score = bleu(trans, references)
             print "iter: %d, bleu: %2.4f" % (i + 1, bleu_score)
             if bleu_score > best_score:
