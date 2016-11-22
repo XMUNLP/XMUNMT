@@ -612,7 +612,7 @@ def train(args):
                         serialize(bestname, model)
 
             if count % option["sfreq"] == 0:
-                n = len(data)
+                n = len(data[0])
                 ind = numpy.random.randint(0, n)
                 sdata = data[0][ind]
                 tdata = data[1][ind]
