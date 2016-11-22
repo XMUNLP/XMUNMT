@@ -170,7 +170,7 @@ def parseargs_train(args):
     parser.add_argument("--corpus", nargs=2, help=msg)
     msg = "source and target vocabulary"
     parser.add_argument("--vocab", nargs=2, help=msg)
-    msg = "model name to save or saved model to initalize, required"
+    msg = "model name to save or saved model to initialize, required"
     parser.add_argument("--model", required=True, help=msg)
 
     # model parameters
@@ -231,7 +231,7 @@ def parseargs_train(args):
     # control beamsearch
     msg = "beam size, default 10"
     parser.add_argument("--beamsize", type=int, help=msg)
-    msg = "normalize probability by the length of cadidate sentences"
+    msg = "normalize probability by the length of candidate sentences"
     parser.add_argument("--normalize", type=int, help=msg)
     msg = "max translation length"
     parser.add_argument("--maxlen", type=int, help=msg)
@@ -254,7 +254,7 @@ def parseargs_decode(args):
     parser.add_argument("--model", nargs="+", required=True, help=msg)
     msg = "beam size"
     parser.add_argument("--beamsize", default=10, type=int, help=msg)
-    msg = "normalize probability by the length of cadidate sentences"
+    msg = "normalize probability by the length of candidate sentences"
     parser.add_argument("--normalize", action="store_true", help=msg)
     msg = "use arithmetic mean instead of geometric mean"
     parser.add_argument("--arithmetic", action="store_true", help=msg)
@@ -271,21 +271,18 @@ def parseargs_sample(args):
     usage = "rnnsearch.py sample [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
 
-    # input model
     msg = "trained model"
     parser.add_argument("--model", required=True, help=msg)
-    # batch size
     msg = "sample batch examples"
     parser.add_argument("--batch", default=1, type=int, help=msg)
-    # max length
-    msg = "max translation length"
+    msg = "max sentence length"
     parser.add_argument("--maxlen", type=int, help=msg)
 
     return parser.parse_args(args)
 
 
 def parseargs_replace(args):
-    msg = "translate using exsiting nmt model"
+    msg = "replace unk symbol"
     usage = "rnnsearch.py replace [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
 
@@ -293,8 +290,8 @@ def parseargs_replace(args):
     parser.add_argument("--model", required=True, nargs="+", help=msg)
     msg = "source text and translation file"
     parser.add_argument("--text", required=True, nargs=2, help=msg)
-    msg = "replacement dictionary"
-    parser.add_argument("--dictionary", required=True, type=str, help=msg)
+    msg = "dictionary used to replace unk"
+    parser.add_argument("--dictionary", type=str, help=msg)
     msg = "replacement heuristic (0: copy, 1: replace, 2: heuristic replace)"
     parser.add_argument("--heuristic", type=int, default=1, help=msg)
     msg = "batch size"
@@ -767,8 +764,11 @@ def replace(args):
     num_models = len(args.model)
     models = [None for i in range(num_models)]
     alignments = [None for i in range(num_models)]
-    mapping = load_dictionary(args.dictionary)
-    heuristic = args.heuristic
+    if args.dictionary:
+        mapping = load_dictionary(args.dictionary)
+        heuristic = args.heuristic
+    else:
+        heuristic = 0
 
     for i in range(num_models):
         option, params = loadmodel(args.model[i])
