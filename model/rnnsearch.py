@@ -13,6 +13,7 @@ from nn import config, variable_scope
 from nn import embedding, embedding_config
 from nn import feedforward, feedforward_config
 from utils import get_or_default, add_if_not_exsit
+from search import beam, select_nbest
 
 
 class encoder_config(config):
@@ -489,92 +490,74 @@ class rnnsearch:
         self.attention = compile_function(attention_graph)
 
 
-# based on groundhog's impelmentation
-def beamsearch(models, xseq, **option):
-    add_if_not_exsit(option, "beamsize", 10)
-    add_if_not_exsit(option, "normalize", False)
-    add_if_not_exsit(option, "maxlen", None)
-    add_if_not_exsit(option, "minlen", None)
-    add_if_not_exsit(option, "arithmetric", False)
+def beamsearch(models, seq, beamsize=10, normalize=False, maxlen=None,
+               minlen=None, arithmetic=False):
+    size = beamsize
 
     if not isinstance(models, (list, tuple)):
         models = [models]
 
     num_models = len(models)
-    functions = [model.search for model in models]
 
+    # get vocabulary from the first model
     vocabulary = models[0].option["vocabulary"]
-    eos = models[0].option["eos"]
+    eos_symbol = models[0].option["eos"]
     vocab = vocabulary[1][1]
-    eosid = vocabulary[1][0][eos]
-
-    size = option["beamsize"]
-    maxlen = option["maxlen"]
-    minlen = option["minlen"]
-    normalize = option["normalize"]
-    arithmetric = option["arithmetric"]
+    eosid = vocabulary[1][0][eos_symbol]
 
     if maxlen == None:
-        maxlen = len(xseq) * 3
+        maxlen = seq.shape[0] * 3
 
     if minlen == None:
-        minlen = len(xseq) / 2
+        minlen = seq.shape[0] / 2
 
-    annot = [None for i in range(num_models)]
-    mannot = [None for i in range(num_models)]
-    contexts = [None for i in range(num_models)]
-    states = [None for i in range(num_models)]
-    probs = [None for i in range(num_models)]
+    # encoding source
+    mask = numpy.ones(seq.shape, "float32")
+    annotations = [model.search[0](seq, mask) for model in models]
+    istates_and_mannots = [model.search[1](annot) for annot, model in
+                           zip(annotations, models)]
 
-    xmask = numpy.ones(xseq.shape, "float32")
+    # compute initial state and map annotation for fast attention
+    states = [item[0] for item in istates_and_mannots]
+    mapped_annots = [item[1] for item in istates_and_mannots]
 
-    for i in range(num_models):
-        encode = functions[i][0]
-        compute_istate = functions[i][1]
-        annot[i] = encode(xseq, xmask)
-        states[i], mannot[i] = compute_istate(annot[i])
+    initial_beam = beam(size)
+    # </s>
+    initial_beam.candidate = [[0]]
+    initial_beam.score = numpy.zeros([1], "float32")
 
-    hdim = states[0].shape[1]
-    cdim = annot[0].shape[2]
-    # [num_models, batch, dim]
-    states = numpy.array(states)
-
-    trans = [[]]
-    costs = [0.0]
-    final_trans = []
-    final_costs = []
+    hypo_list = []
+    beam_list = [initial_beam]
+    cond = lambda x: x[-1] == eosid
 
     for k in range(maxlen):
-        if size == 0:
-            break
+        # get previous results
+        prev_beam = beam_list[-1]
+        candidate = prev_beam.candidate
+        num = len(candidate)
+        last_words = numpy.array(map(lambda t: t[-1], candidate), "int32")
 
-        num = len(trans)
+        # compute context first, then compute word distribution
+        batch_mask = numpy.repeat(mask, num, 1)
+        batch_annots = map(numpy.repeat, annotations, [num] * num_models,
+                           [1] * num_models)
+        batch_mannots = map(numpy.repeat, mapped_annots, [num] * num_models,
+                           [1] * num_models)
 
-        if k > 0:
-            last_words = numpy.array(map(lambda t: t[-1], trans))
-            last_words = last_words.astype("int32")
-        else:
-            last_words = numpy.zeros(num, "int32")
+        # function[2] returns (context, alpha)
+        outputs = [model.search[2](state, batch_mask, annot, mannot)
+                   for model, state, annot, mannot in
+                   zip(models, states, batch_annots, batch_mannots)]
+        contexts = [item[0] for item in outputs]
+        prob_dists = [model.search[3](last_words, state, context) for
+                      model, state, context in zip(models, states, contexts)]
 
-        xmasks = numpy.repeat(xmask, num, 1)
-        ymask = numpy.ones((num,), "float32")
-        annots = [numpy.repeat(annot[i], num, 1) for i in range(num_models)]
-        mannots = [numpy.repeat(mannot[i], num, 1) for i in range(num_models)]
-
-        for i in range(num_models):
-            compute_context = functions[i][2]
-            contexts[i], alpha = compute_context(states[i], xmasks, annots[i],
-                                          mannots[i])
-
-        for i in range(num_models):
-            compute_probs = functions[i][3]
-            probs[i] = compute_probs(last_words, states[i], contexts[i])
-
-        if arithmetric:
-            logprobs = numpy.log(sum(probs) / num_models)
+        # search nbest given word distribution
+        if arithmetic:
+            logprobs = numpy.log(sum(prob_dists) / num_models)
         else:
             # geometric mean
-            logprobs = sum(numpy.log(probs)) / num_models
+            logprobs = sum(numpy.log(prob_dists)) / num_models
 
         if k < minlen:
             logprobs[:, eosid] = -numpy.inf
@@ -586,74 +569,60 @@ def beamsearch(models, xseq, **option):
             logprobs[:, :] = -numpy.inf
             logprobs[:, eosid] = eosprob
 
-        ncosts = numpy.array(costs)[:, None] - logprobs
-        fcosts = ncosts.flatten()
-        nbest = numpy.argpartition(fcosts, size)[:size]
+        next_beam = beam(size)
+        outputs = next_beam.prune(logprobs, cond, prev_beam)
 
-        vocsize = logprobs.shape[1]
-        tinds = nbest / vocsize
-        winds = nbest % vocsize
-        costs = fcosts[nbest]
+        # translation complete
+        hypo_list.extend(outputs[0])
+        batch_indices, word_indices = outputs[1:]
+        size -= len(outputs[0])
 
-        newtrans = [[]] * size
-        newcosts = numpy.zeros(size)
-        newstates = numpy.zeros((num_models, size, hdim), "float32")
-        newcontexts = numpy.zeros((num_models, size, cdim), "float32")
-        inputs = numpy.zeros(size, "int32")
+        if size == 0:
+            break
 
-        for i, (idx, nword, ncost) in enumerate(zip(tinds, winds, costs)):
-            newtrans[i] = trans[idx] + [nword]
-            newcosts[i] = ncost
-            for j in range(num_models):
-                newstates[j][i] = states[j][idx]
-                newcontexts[j][i] = contexts[j][idx]
-            inputs[i] = nword
+        # generate next state
+        candidate = next_beam.candidate
+        num = len(candidate)
+        last_words = numpy.array(map(lambda t: t[-1], candidate), "int32")
 
-        ymask = numpy.ones((size,), "float32")
+        states = select_nbest(states, batch_indices)
+        contexts = select_nbest(contexts, batch_indices)
 
-        for i in range(num_models):
-            compute_state = functions[i][-1]
-            newstates[i] = compute_state(inputs, ymask, newstates[i],
-                                         newcontexts[i])
+        batch_ymask = numpy.ones((num,), "float32")
 
-        trans = []
-        costs = []
-        indices = []
+        states = [model.search[-1](last_words, batch_ymask, state, context)
+                  for model, state, context in zip(models, states, contexts)]
 
-        for i in range(size):
-            if newtrans[i][-1] != eosid:
-                trans.append(newtrans[i])
-                costs.append(newcosts[i])
-                indices.append(i)
-            else:
-                size -= 1
-                final_trans.append(newtrans[i])
-                final_costs.append(newcosts[i])
+        beam_list.append(next_beam)
 
-        states = newstates[:, indices]
+    # postprocessing
+    if len(hypo_list) == 0:
+        score_list = [0.0]
+        hypo_list = [["</s>"]]
+    else:
+        score_list = [item[1] for item in hypo_list]
+        # exclude bos symbol
+        hypo_list = [item[0][1:] for item in hypo_list]
 
-    if len(final_trans) == 0:
-        final_trans = [[]]
-        final_costs = [0.0]
-
-    for i, (cost, trans) in enumerate(zip(final_costs, final_trans)):
+    for i, (trans, score) in enumerate(zip(hypo_list, score_list)):
         count = len(trans)
         if count > 0:
             if normalize:
-                final_costs[i] = cost / count
+                score_list[i] = score / count
             else:
-                final_costs[i] = cost
+                score_list[i] = score
 
-    final_trans = numpy.array(final_trans)[numpy.argsort(final_costs)]
-    final_costs = numpy.array(sorted(final_costs))
+    # sort
+    hypo_list = numpy.array(hypo_list)[numpy.argsort(score_list)]
+    score_list = numpy.array(sorted(score_list))
 
-    translations = []
+    output = []
 
-    for cost, trans in zip(final_costs, final_trans):
+    for trans, score in zip(hypo_list, score_list):
         trans = map(lambda x: vocab[x], trans)
-        translations.append((trans, cost))
+        output.append((trans, score))
 
-    return translations
+    return output
 
 
 def batchsample(model, xseq, xmask, **option):
@@ -677,7 +646,7 @@ def batchsample(model, xseq, xmask, **option):
 
     for i in range(trans.shape[1]):
         example = trans[:, i]
-        # remove <eos> symbol
+        # remove eos symbol
         index = -1
 
         for i in range(len(example)):

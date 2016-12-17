@@ -615,15 +615,11 @@ def train(args):
                 tdata = data[1][ind]
                 xdata = xdata[:, ind : ind + 1]
                 hls = beamsearch(model, xdata)
-                if len(hls) > 0:
-                    best, score = hls[0]
-                    print sdata
-                    print tdata
-                    print " ".join(best[:-1])
-                else:
-                    print sdata
-                    print tdata
-                    print "warning: no translation"
+                best, score = hls[0]
+                print sdata
+                print tdata
+                print " ".join(best[:-1])
+
 
         print "--------------------------------------------------"
 
