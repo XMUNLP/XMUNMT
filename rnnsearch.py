@@ -341,7 +341,7 @@ def getoption():
     option["sfreq"] = 50
     option["seed"] = 1234
     option["validation"] = None
-    option["ref"] = None
+    option["references"] = None
     option["bleu"] = 0.0
     option["indices"] = None
 
@@ -420,7 +420,7 @@ def override(option, args):
 
     # runtime information
     override_if_not_none(option, args, "validation")
-    override_if_not_none(option, args, "ref")
+    override_if_not_none(option, args, "references")
     override_if_not_none(option, args, "freq")
     override_if_not_none(option, args, "vfreq")
     override_if_not_none(option, args, "sfreq")
@@ -463,7 +463,7 @@ def print_option(option):
     print "decay:", option["decay"]
 
     print "validation:", option["validation"]
-    print "ref:", option["ref"]
+    print "references:", option["references"]
     print "freq:", option["freq"]
     print "vfreq:", option["vfreq"]
     print "sfreq:", option["sfreq"]
@@ -507,8 +507,8 @@ def train(args):
     # set seed
     numpy.random.seed(option["seed"])
 
-    if option["ref"]:
-        references = loadreferences(option["ref"])
+    if option["references"]:
+        references = loadreferences(option["references"])
     else:
         references = None
 
