@@ -598,7 +598,7 @@ def beamsearch(models, seq, beamsize=10, normalize=False, maxlen=None,
     # postprocessing
     if len(hypo_list) == 0:
         score_list = [0.0]
-        hypo_list = [["</s>"]]
+        hypo_list = [[eosid]]
     else:
         score_list = [item[1] for item in hypo_list]
         # exclude bos symbol

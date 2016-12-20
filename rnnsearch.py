@@ -209,7 +209,7 @@ def parseargs_train(args):
     msg = "validation dataset"
     parser.add_argument("--validation", type=str, help=msg)
     msg = "reference data"
-    parser.add_argument("--ref", type=str, nargs="+", help=msg)
+    parser.add_argument("--references", type=str, nargs="+", help=msg)
 
     # data processing
     msg = "sort batches"
