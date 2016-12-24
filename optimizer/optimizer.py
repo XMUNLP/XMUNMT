@@ -8,27 +8,20 @@ import theano
 import updates
 import constraint
 
+from ops import trainable_variables
 from collections import OrderedDict
 
 
 class optimizer:
 
     def __init__(self, model, **option):
-        information = {}
-
-        information["sgd"] = (1, [1.0])
-        information["adagrad"] = (2, [1.0, 1e-6])
-        information["rmsprop"] = (3, [1e-2, 0.99, 1e-8])
-        # torch default: 1.0, 0.9, 1e-6
-        information["adadelta"] = (3, [1.0, 0.95, 1e-6])
-        information["adam"] = (4, [0.001, 0.9, 0.999, 1e-8])
-        information["rmsprop_momentum"] = (4, [1e-4, 0.95, 0.9, 1e-4])
-
         cost = model.cost
-        params = model.parameter
         inputs = model.inputs
         outputs = model.outputs
         scan_updates = model.updates
+
+        if "variables" not in option or not option["variables"]:
+            params = trainable_variables()
 
         grads = theano.grad(cost, params)
         gradsref = grads
@@ -57,7 +50,7 @@ class optimizer:
             option["initialize"] = False
 
         if "nanguard" not in option:
-            option["nanguard"] = True
+            option["nanguard"] = False
 
         algorithm = option["algorithm"]
         variant = option["variant"]
@@ -147,6 +140,7 @@ class optimizer:
         else:
             raise "Error: " + algorithm + " is not supported"
 
+        # restore variables used by optimizer
         if option["initialize"]:
             values = option["initialize"]
             for v1, v2 in zip(svar, values):
@@ -181,5 +175,4 @@ class optimizer:
         self.update = wrapper
         self.option = option
         self.algorithm = algorithm
-        self.information = information
         self.parameter = svar

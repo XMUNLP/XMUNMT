@@ -14,16 +14,17 @@ from metric import bleu
 from optimizer import optimizer
 from data import textreader, textiterator, processdata, getlen
 from model.rnnsearch import rnnsearch, beamsearch, batchsample
+from ops import random_uniform_initializer, trainable_variables
 
 
-def loadvocab(file):
+def load_vocab(file):
     fd = open(file, "r")
     vocab = cPickle.load(fd)
     fd.close()
     return vocab
 
 
-def invertvoc(vocab):
+def invert_vocab(vocab):
     v = {}
     for k, idx in vocab.iteritems():
         v[idx] = k
@@ -31,16 +32,9 @@ def invertvoc(vocab):
     return v
 
 
-def uniform(params, lower, upper, dtype="float32"):
-
-    for p in params:
-        s = p.get_value().shape
-        v = numpy.random.uniform(lower, upper, s).astype(dtype)
-        p.set_value(v)
-
-
-def parameters(params):
+def count_parameters():
     n = 0
+    params = trainable_variables()
 
     for item in params:
         v = item.get_value()
@@ -49,10 +43,9 @@ def parameters(params):
     return n
 
 
-def serialize(name, model):
+def serialize(name, option):
     fd = open(name, "w")
-    option = model.option
-    params = model.parameter
+    params = trainable_variables()
     names = [p.name for p in params]
     vals = dict([(p.name, p.get_value()) for p in params])
 
@@ -69,13 +62,13 @@ def serialize(name, model):
 
 
 # load model from file
-def loadmodel(name):
+def load_model(name):
     fd = open(name, "r")
     option = cPickle.load(fd)
     names = cPickle.load(fd)
     vals = dict(numpy.load(fd))
 
-    params = [vals[n] for n in names]
+    params = [(n, vals[n]) for n in names]
 
     if "indices" in vals:
         option["indices"] = vals["indices"]
@@ -83,12 +76,44 @@ def loadmodel(name):
     return option, params
 
 
-def set_variables(params, values):
-    for p, v in zip(params, values):
+def restore_variables(values):
+    variables = trainable_variables()
+    variables = dict((var.name, var) for var in variables)
+    values = dict(values)
+
+    for name in variables:
+        var = variables[name]
+
+        # match name
+        if name in values:
+            value = values[name]
+
+        if var.get_value().shape != value.shape:
+            continue
+
+        var.set_value(value)
+        sys.stderr.write("%s restored\n" % name)
+
+
+def set_variables(variables, values):
+    values = [item[1] for item in values]
+
+    for p, v in zip(variables, values):
         p.set_value(v)
 
 
-def loadreferences(names, case=True):
+def get_variables_with_prefix(prefix):
+    var_list = trainable_variables()
+    new_list = []
+
+    for var in var_list:
+        if var.name.startswith(prefix):
+            new_list.append(var)
+
+    return new_list
+
+
+def load_references(names, case=True):
     references = []
     reader = textreader(names)
     stream = textiterator(reader, size=[1, 1])
@@ -109,29 +134,6 @@ def loadreferences(names, case=True):
     stream.close()
 
     return references
-
-
-def translate(model, corpus, **opt):
-    fd = open(corpus, "r")
-    svocab = model.option["vocabulary"][0][0]
-    unk_symbol = model.option["unk"]
-    eos_symbol = model.option["eos"]
-
-    trans = []
-
-    for line in fd:
-        line = line.strip()
-        data, mask = processdata([line], svocab, unk_symbol, eos_symbol)
-        hls = beamsearch(model, data, **opt)
-        if len(hls) > 0:
-            best, score = hls[0]
-            trans.append(best[:-1])
-        else:
-            trans.append([])
-
-    fd.close()
-
-    return trans
 
 
 # format: source target prob
@@ -158,6 +160,29 @@ def load_dictionary(filename):
     fd.close()
 
     return newmapping
+
+
+def translate(model, corpus, **opt):
+    fd = open(corpus, "r")
+    svocab = model.option["vocabulary"][0][0]
+    unk_symbol = model.option["unk"]
+    eos_symbol = model.option["eos"]
+
+    trans = []
+
+    for line in fd:
+        line = line.strip()
+        data, mask = processdata([line], svocab, unk_symbol, eos_symbol)
+        hypo_list = beamsearch(model, data, **opt)
+        if len(hypo_list) > 0:
+            best, score = hypo_list[0]
+            trans.append(best[:-1])
+        else:
+            trans.append([])
+
+    fd.close()
+
+    return trans
 
 
 def parseargs_train(args):
@@ -303,7 +328,7 @@ def parseargs_replace(args):
 
 
 # default options
-def getoption():
+def get_option():
     option = {}
 
     # training corpus and vocabulary
@@ -385,19 +410,22 @@ def override(option, args):
     # vocabulary and model paramters cannot be overrided
     if option["vocab"] == None:
         option["vocab"] = args.vocab
-        svocab = loadvocab(args.vocab[0])
-        tvocab = loadvocab(args.vocab[1])
-        isvocab = invertvoc(svocab)
-        itvocab = invertvoc(tvocab)
+        svocab = load_vocab(args.vocab[0])
+        tvocab = load_vocab(args.vocab[1])
+        isvocab = invert_vocab(svocab)
+        itvocab = invert_vocab(tvocab)
 
-        # compatible with groundhog
-        option["source_eos_id"] = len(isvocab)
-        option["target_eos_id"] = len(itvocab)
+        # append a new symbol "<eos>" to vocabulary, it is not necessary
+        # because we can reuse "</s>" symbol in vocabulary
+        # but here we retain compatibility with GroundHog
+        svocab[option["eos"]] = len(isvocab)
+        tvocab[option["eos"]] = len(itvocab)
+        isvocab[len(isvocab)] = option["eos"]
+        itvocab[len(itvocab)] = option["eos"]
 
-        svocab[option["eos"]] = option["source_eos_id"]
-        tvocab[option["eos"]] = option["target_eos_id"]
-        isvocab[option["source_eos_id"]] = option["eos"]
-        itvocab[option["target_eos_id"]] = option["eos"]
+        # <s> and </s> have the same id 0, used for decoding (target side)
+        option["bosid"] = 0
+        option["eosid"] = len(itvocab) - 1
 
         option["vocabulary"] = [[svocab, isvocab], [tvocab, itvocab]]
 
@@ -482,21 +510,21 @@ def print_option(option):
     print "eos:", option["eos"]
 
 
-def skipstream(stream, count):
+def skip_stream(stream, count):
     for i in range(count):
         stream.next()
 
 
-def getfilename(name):
+def get_filename(name):
     s = name.split(".")
     return s[0]
 
 
 def train(args):
-    option = getoption()
+    option = get_option()
 
     if os.path.exists(args.model):
-        option, params = loadmodel(args.model)
+        option, params = load_model(args.model)
         init = False
     else:
         init = True
@@ -508,7 +536,7 @@ def train(args):
     numpy.random.seed(option["seed"])
 
     if option["references"]:
-        references = loadreferences(option["references"])
+        references = load_references(option["references"])
     else:
         references = None
 
@@ -517,7 +545,7 @@ def train(args):
     tvocab, itvocab = tvocabs
 
     pathname, basename = os.path.split(args.model)
-    modelname = getfilename(basename)
+    modelname = get_filename(basename)
     autoname = os.path.join(pathname, modelname + ".autosave.pkl")
     bestname = os.path.join(pathname, modelname + ".best.pkl")
     batch = option["batch"]
@@ -536,18 +564,17 @@ def train(args):
         option["epoch"] = 0
         option["cost"] = 0.0
 
-    skipstream(reader, option["count"][1])
+    skip_stream(reader, option["count"][1])
     epoch = option["epoch"]
     maxepoch = option["maxepoch"]
 
-    model = rnnsearch(**option)
+    initializer = random_uniform_initializer(-0.08, 0.08)
+    model = rnnsearch(initializer=initializer, **option)
 
-    if init:
-        uniform(model.parameter, -0.08, 0.08)
-    else:
-        set_variables(model.parameter, params)
+    if not init:
+        restore_variables(params)
 
-    print "parameters:", parameters(model.parameter)
+    print "parameters:", count_parameters()
 
     # tuning option
     toption = {}
@@ -589,11 +616,11 @@ def train(args):
 
             # autosave
             if count % option["freq"] == 0:
-                model.option["indices"] = reader.get_indices()
-                model.option["bleu"] = best_score
-                model.option["cost"] = totcost
-                model.option["count"] = [count, reader.count]
-                serialize(autoname, model)
+                option["indices"] = reader.get_indices()
+                option["bleu"] = best_score
+                option["cost"] = totcost
+                option["count"] = [count, reader.count]
+                serialize(autoname, option)
 
             if count % option["vfreq"] == 0:
                 if option["validation"] and references:
@@ -602,11 +629,11 @@ def train(args):
                     print "bleu: %2.4f" % bleu_score
                     if bleu_score > best_score:
                         best_score = bleu_score
-                        model.option["indices"] = reader.get_indices()
-                        model.option["bleu"] = best_score
-                        model.option["cost"] = totcost
-                        model.option["count"] = [count, reader.count]
-                        serialize(bestname, model)
+                        option["indices"] = reader.get_indices()
+                        option["bleu"] = best_score
+                        option["cost"] = totcost
+                        option["count"] = [count, reader.count]
+                        serialize(bestname, option)
 
             if count % option["sfreq"] == 0:
                 n = len(data[0])
@@ -629,11 +656,11 @@ def train(args):
             print "iter: %d, bleu: %2.4f" % (i + 1, bleu_score)
             if bleu_score > best_score:
                 best_score = bleu_score
-                model.option["indices"] = reader.get_indices()
-                model.option["bleu"] = best_score
-                model.option["cost"] = totcost
-                model.option["count"] = [count, reader.count]
-                serialize(bestname, model)
+                option["indices"] = reader.get_indices()
+                option["bleu"] = best_score
+                option["cost"] = totcost
+                option["count"] = [count, reader.count]
+                serialize(bestname, option)
 
         print "averaged cost: ", totcost / count
         print "--------------------------------------------------"
@@ -647,13 +674,13 @@ def train(args):
         stream.reset()
 
         # update autosave
-        model.option["epoch"] = i + 1
-        model.option["alpha"] = alpha
-        model.option["indices"] = reader.get_indices()
-        model.option["bleu"] = best_score
-        model.option["cost"] = totcost
-        model.option["count"] = [0, 0]
-        serialize(autoname, model)
+        option["epoch"] = i + 1
+        option["alpha"] = alpha
+        option["indices"] = reader.get_indices()
+        option["bleu"] = best_score
+        option["cost"] = totcost
+        option["count"] = [0, 0]
+        serialize(autoname, option)
 
     print "best(bleu): %2.4f" % best_score
 
@@ -665,15 +692,17 @@ def decode(args):
     models = [None for i in range(num_models)]
 
     for i in range(num_models):
-        option, params = loadmodel(args.model[i])
-        model = rnnsearch(**option)
-        set_variables(model.parameter, params)
+        option, params = load_model(args.model[i])
+        scope = "rnnsearch_%d" % i
+        model = rnnsearch(scope=scope, **option)
+        var_list = get_variables_with_prefix(scope)
+        set_variables(var_list, params)
         models[i] = model
 
     # use the first model
     svocabs, tvocabs = models[0].option["vocabulary"]
-    unk_symbol = models[0].option["unk"]
-    eos_symbol = models[0].option["eos"]
+    unk_sym = models[0].option["unk"]
+    eos_sym = models[0].option["eos"]
 
     count = 0
 
@@ -694,18 +723,20 @@ def decode(args):
             break
 
         data = [line]
-        seq, mask = processdata(data, svocab, unk_symbol, eos_symbol)
+        seq, mask = processdata(data, svocab, unk_sym, eos_sym)
         t1 = time.time()
         tlist = beamsearch(models, seq, **option)
         t2 = time.time()
 
         if len(tlist) == 0:
-            sys.stdout.write("\n")
+            translation = ""
             score = -10000.0
         else:
             best, score = tlist[0]
-            sys.stdout.write(" ".join(best[:-1]))
-            sys.stdout.write("\n")
+            translation = " ".join(best[:-1])
+
+        sys.stdout.write(translation)
+        sys.stdout.write("\n")
 
         count = count + 1
         sys.stderr.write(str(count) + " ")
@@ -713,9 +744,9 @@ def decode(args):
 
 
 def sample(args):
-    option, values = loadmodel(args.model)
+    option, values = load_model(args.model)
     model = rnnsearch(**option)
-    set_variables(model.parameter, values)
+    set_variables(trainable_variables(), values)
 
     svocabs, tvocabs = model.option["vocabulary"]
     unk_symbol = model.option["unk"]
@@ -760,16 +791,21 @@ def replace(args):
     num_models = len(args.model)
     models = [None for i in range(num_models)]
     alignments = [None for i in range(num_models)]
+
     if args.dictionary:
         mapping = load_dictionary(args.dictionary)
         heuristic = args.heuristic
     else:
+        if args.heuristic > 0:
+            raise ValueError("heuristic > 0, but no dictionary available")
         heuristic = 0
 
     for i in range(num_models):
-        option, params = loadmodel(args.model[i])
-        model = rnnsearch(**option)
-        set_variables(model.parameter, params)
+        option, params = load_model(args.model[i])
+        scope = "rnnsearch_%d" % i
+        model = rnnsearch(scope=scope, **option)
+        var_list = get_variables_with_prefix(scope)
+        set_variables(var_list, params)
         models[i] = model
 
     # use the first model
@@ -789,9 +825,9 @@ def replace(args):
 
         for i in range(num_models):
             # compute attention score
-            alignments[i] = models[i].attention(xdata, xmask, ydata, ymask)
+            alignments[i] = models[i].align(xdata, xmask, ydata, ymask)
 
-        # ensemble, alignment: yseq * xseq * batch
+        # ensemble, alignment: tgt_len * src_len * batch
         if args.arithmetic:
             alignment = sum(alignments) / num_models
         else:
@@ -826,7 +862,7 @@ def replace(args):
                             translation.append(mapping[source_word])
                         else:
                             # source word begin with lower case letter
-                            if source_word.decode('utf-8')[0].islower():
+                            if source_word.decode("utf-8")[0].islower():
                                 translation.append(mapping[source_word])
                             else:
                                 translation.append(source_word)
@@ -846,9 +882,9 @@ def helpinfo():
     print "usage:"
     print "\trnnsearch.py <command> [<args>]"
     print "use 'rnnsearch.py train --help' to see training options"
-    print "use 'rnnsearch.py translate' --help to see translation options"
+    print "use 'rnnsearch.py translate' --help to see decoding options"
     print "use 'rnnsearch.py sample' --help to see sampling options"
-    print "use 'rnnsearch.py replace' --help to see unk replacement options"
+    print "use 'rnnsearch.py replace' --help to see UNK replacement options"
 
 
 if __name__ == "__main__":

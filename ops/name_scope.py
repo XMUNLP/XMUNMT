@@ -1,15 +1,13 @@
-# variable.py
+# name_scope.py
+# codes modified from Tensorflow's tf.name_scope
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
 import re
-import theano
 import contextlib
 
 
 # global variable
-_TRAINABLE_VARIABLES = []
-_ALL_VARIABLES = []
 _NAME_STACK = ""
 _NAMES_IN_USE = {}
 _VALID_OP_NAME_REGEX = re.compile("^[A-Za-z0-9.][A-Za-z0-9_.\\-/]*$")
@@ -41,7 +39,7 @@ def unique_name(name, mark_as_used=True):
 
 
 @contextlib.contextmanager
-def variable_scope(name):
+def name_scope(name):
     global _NAME_STACK
 
     if name:
@@ -71,38 +69,5 @@ def variable_scope(name):
         _NAME_STACK = old_stack
 
 
-def get_variable_scope():
+def get_name_scope():
     return _NAME_STACK
-
-
-def get_trainable_variables():
-    return _TRAINABLE_VARIABLES
-
-
-def get_all_variables():
-    return _ALL_VARIABLES
-
-
-def variable(name, shape, initializer, dtype=theano.config.floatX,
-             trainable=True):
-    global _TRAINABLE_VARIABLES
-    global _ALL_VARIABLES
-
-    if callable(initializer):
-        val = initializer()(shape, dtype)
-    else:
-        val = initializer
-
-    scope = get_variable_scope()
-
-    if scope:
-        name = unique_name(name)
-
-    var = theano.shared(val, name=name, borrow=True)
-
-    if trainable:
-        _TRAINABLE_VARIABLES.append(var)
-
-    _ALL_VARIABLES.append(var)
-
-    return var

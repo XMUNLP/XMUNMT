@@ -1,4 +1,5 @@
 # convert.py
+# convert GroundHog's format to our format
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
@@ -7,8 +8,8 @@ import cPickle
 import argparse
 
 
-def loadvocab(file):
-    fd = open(file, "r")
+def loadvocab(name):
+    fd = open(name, "r")
     vocab = cPickle.load(fd)
     fd.close()
     return vocab
@@ -57,8 +58,8 @@ def getoption():
     option["vfreq"] = 1000
     option["sfreq"] = 50
     option["seed"] = 1234
-    option["validate"] = None
-    option["ref"] = None
+    option["validation"] = None
+    option["references"] = None
     option["bleu"] = 0.0
     option["indices"] = None
 
@@ -82,44 +83,42 @@ def get_rnnsearch_keys():
     keys.append("rnnsearch/source_embedding/bias")
     keys.append("rnnsearch/target_embedding/embedding")
     keys.append("rnnsearch/target_embedding/bias")
-    keys.append("rnnsearch/encoder/forward_rnn/reset_gate/weight")
-    keys.append("rnnsearch/encoder/forward_rnn/reset_gate/weight_1")
-    keys.append("rnnsearch/encoder/forward_rnn/update_gate/weight")
-    keys.append("rnnsearch/encoder/forward_rnn/update_gate/weight_1")
-    keys.append("rnnsearch/encoder/forward_rnn/candidate/weight")
-    keys.append("rnnsearch/encoder/forward_rnn/candidate/weight_1")
-    keys.append("rnnsearch/encoder/forward_rnn/candidate/bias")
-    keys.append("rnnsearch/encoder/backward_rnn/reset_gate/weight")
-    keys.append("rnnsearch/encoder/backward_rnn/reset_gate/weight_1")
-    keys.append("rnnsearch/encoder/backward_rnn/update_gate/weight")
-    keys.append("rnnsearch/encoder/backward_rnn/update_gate/weight_1")
-    keys.append("rnnsearch/encoder/backward_rnn/candidate/weight")
-    keys.append("rnnsearch/encoder/backward_rnn/candidate/weight_1")
-    keys.append("rnnsearch/encoder/backward_rnn/candidate/bias")
-    keys.append("rnnsearch/decoder/init_transform/weight")
-    keys.append("rnnsearch/decoder/init_transform/bias")
-    keys.append("rnnsearch/decoder/annotation_transform/weight")
-    keys.append("rnnsearch/decoder/state_transform/weight")
-    keys.append("rnnsearch/decoder/context_transform/weight")
-    keys.append("rnnsearch/decoder/rnn/reset_gate/weight")
-    keys.append("rnnsearch/decoder/rnn/reset_gate/weight_1")
-    keys.append("rnnsearch/decoder/rnn/reset_gate/weight_2")
-    keys.append("rnnsearch/decoder/rnn/update_gate/weight")
-    keys.append("rnnsearch/decoder/rnn/update_gate/weight_1")
-    keys.append("rnnsearch/decoder/rnn/update_gate/weight_2")
-    keys.append("rnnsearch/decoder/rnn/candidate/weight")
-    keys.append("rnnsearch/decoder/rnn/candidate/weight_1")
-    keys.append("rnnsearch/decoder/rnn/candidate/weight_2")
-    keys.append("rnnsearch/decoder/rnn/candidate/bias")
-    keys.append("rnnsearch/decoder/maxout/weight")
-    keys.append("rnnsearch/decoder/maxout/weight_1")
-    keys.append("rnnsearch/decoder/maxout/weight_2")
+    keys.append("rnnsearch/encoder/forward/gru_cell/reset_gate/matrix_0")
+    keys.append("rnnsearch/encoder/forward/gru_cell/reset_gate/matrix_1")
+    keys.append("rnnsearch/encoder/forward/gru_cell/update_gate/matrix_0")
+    keys.append("rnnsearch/encoder/forward/gru_cell/update_gate/matrix_1")
+    keys.append("rnnsearch/encoder/forward/gru_cell/candidate/matrix_0")
+    keys.append("rnnsearch/encoder/forward/gru_cell/candidate/matrix_1")
+    keys.append("rnnsearch/encoder/forward/gru_cell/candidate/bias")
+    keys.append("rnnsearch/encoder/backward/gru_cell/reset_gate/matrix_0")
+    keys.append("rnnsearch/encoder/backward/gru_cell/reset_gate/matrix_1")
+    keys.append("rnnsearch/encoder/backward/gru_cell/update_gate/matrix_0")
+    keys.append("rnnsearch/encoder/backward/gru_cell/update_gate/matrix_1")
+    keys.append("rnnsearch/encoder/backward/gru_cell/candidate/matrix_0")
+    keys.append("rnnsearch/encoder/backward/gru_cell/candidate/matrix_1")
+    keys.append("rnnsearch/encoder/backward/gru_cell/candidate/bias")
+    keys.append("rnnsearch/decoder/initial/matrix_0")
+    keys.append("rnnsearch/decoder/initial/bias")
+    keys.append("rnnsearch/decoder/attention/attention_w/matrix_0")
+    keys.append("rnnsearch/decoder/attention/query_w/matrix_0")
+    keys.append("rnnsearch/decoder/attention/attention_v/matrix_0")
+    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_0")
+    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_1")
+    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_2")
+    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_0")
+    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_1")
+    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_2")
+    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_0")
+    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_1")
+    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_2")
+    keys.append("rnnsearch/decoder/gru_cell/candidate/bias")
+    keys.append("rnnsearch/decoder/maxout/matrix_0")
+    keys.append("rnnsearch/decoder/maxout/matrix_1")
+    keys.append("rnnsearch/decoder/maxout/matrix_2")
     keys.append("rnnsearch/decoder/maxout/bias")
-    keys.append("rnnsearch/decoder/deepout/weight")
-    keys.append("rnnsearch/decoder/classify/weight")
-    keys.append("rnnsearch/decoder/classify/bias")
-
-    return keys
+    keys.append("rnnsearch/decoder/deepout/matrix_0")
+    keys.append("rnnsearch/decoder/logits/matrix_0")
+    keys.append("rnnsearch/decoder/logits/bias")
 
 
 def get_groundhog_keys():
@@ -210,10 +209,13 @@ def main(args):
     isvocab = invertvoc(svocab)
     itvocab = invertvoc(tvocab)
 
-    svocab[option["eos"]] = option["source_eos_id"]
-    tvocab[option["eos"]] = option["target_eos_id"]
-    isvocab[option["source_eos_id"]] = option["eos"]
-    itvocab[option["target_eos_id"]] = option["eos"]
+    svocab[option["eos"]] = state["null_sym_source"]
+    tvocab[option["eos"]] = state["null_sym_target"]
+    isvocab[state["null_sym_source"]] = option["eos"]
+    itvocab[state["null_sym_target"]] = option["eos"]
+
+    option["bosid"] = 0
+    option["eosid"] = state["null_sym_target"]
 
     if len(isvocab) != state["n_sym_source"]:
         raise ValueError("source vocab size not match")
