@@ -5,7 +5,10 @@
 import numpy
 
 
-def getlen(line):
+__all__ = ["get_length", "convert_data"]
+
+
+def get_length(line):
     return len(line.strip().split())
 
 
@@ -13,7 +16,7 @@ def tokenize(data):
     return data.split()
 
 
-def numberize(data, voc, unk="UNK"):
+def to_word_id(data, voc, unk="UNK"):
     newdata = []
     unkid = voc[unk]
 
@@ -24,25 +27,24 @@ def numberize(data, voc, unk="UNK"):
     return newdata
 
 
-def normalize(bat):
-    blen = [len(item) for item in bat]
+def convert_to_array(data, dtype):
+    batch = len(data)
+    data_len = map(len, data)
+    max_len = max(data_len)
 
-    n = len(bat)
-    maxlen = numpy.max(blen)
+    seq = numpy.zeros((max_len, batch), "int32")
+    mask = numpy.zeros((max_len, batch), dtype)
 
-    b = numpy.zeros((maxlen, n), "int32")
-    m = numpy.zeros((maxlen, n), "float32")
+    for idx, item in enumerate(data):
+        seq[:data_len[idx], idx] = item
+        mask[:data_len[idx], idx] = 1.0
 
-    for idx, item in enumerate(bat):
-        b[:blen[idx], idx] = item
-        m[:blen[idx], idx] = 1.0
-
-    return b, m
+    return seq, mask
 
 
-def processdata(data, voc, unk="UNK", eos="<eos>"):
+def convert_data(data, voc, unk="UNK", eos="<eos>", dtype="float32"):
     data = [tokenize(item) + [eos] for item in data]
-    data = numberize(data, voc, unk)
-    data, mask = normalize(data)
+    data = to_word_id(data, voc, unk)
+    seq, mask = convert_to_array(data, dtype)
 
-    return data, mask
+    return seq, mask

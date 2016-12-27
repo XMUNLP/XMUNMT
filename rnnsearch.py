@@ -12,9 +12,9 @@ import argparse
 
 from metric import bleu
 from optimizer import optimizer
-from data import textreader, textiterator, processdata, getlen
 from model.rnnsearch import rnnsearch, beamsearch, batchsample
 from ops import random_uniform_initializer, trainable_variables
+from data import textreader, textiterator, convert_data, get_length
 
 
 def load_vocab(file):
@@ -50,13 +50,20 @@ def serialize(name, option):
     vals = dict([(p.name, p.get_value()) for p in params])
 
     if option["indices"] != None:
-        vals["indices"] = option["indices"]
+        indices = option["indices"]
+        vals["indices"] = indices
         option["indices"] = None
+    else:
+        indices = None
 
     cPickle.dump(option, fd)
     cPickle.dump(names, fd)
     # compress
     numpy.savez(fd, **vals)
+
+    # restore
+    if indices is not None:
+        option["indices"] = vals["indices"]
 
     fd.close()
 
@@ -172,7 +179,7 @@ def translate(model, corpus, **opt):
 
     for line in fd:
         line = line.strip()
-        data, mask = processdata([line], svocab, unk_symbol, eos_symbol)
+        data, mask = convert_data([line], svocab, unk_symbol, eos_symbol)
         hypo_list = beamsearch(model, data, **opt)
         if len(hypo_list) > 0:
             best, score = hypo_list[0]
@@ -552,7 +559,7 @@ def train(args):
     sortk = option["sort"] or 1
     shuffle = option["seed"] if option["shuffle"] else None
     reader = textreader(option["corpus"], shuffle)
-    processor = [getlen, getlen]
+    processor = [get_length, get_length]
     stream = textiterator(reader, [batch, batch * sortk], processor,
                           option["limit"], option["sort"])
 
@@ -600,8 +607,8 @@ def train(args):
 
     for i in range(epoch, maxepoch):
         for data in stream:
-            xdata, xmask = processdata(data[0], svocab, unk_sym, eos_sym)
-            ydata, ymask = processdata(data[1], tvocab, unk_sym, eos_sym)
+            xdata, xmask = convert_data(data[0], svocab, unk_sym, eos_sym)
+            ydata, ymask = convert_data(data[1], tvocab, unk_sym, eos_sym)
 
             t1 = time.time()
             cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
@@ -723,7 +730,7 @@ def decode(args):
             break
 
         data = [line]
-        seq, mask = processdata(data, svocab, unk_sym, eos_sym)
+        seq, mask = convert_data(data, svocab, unk_sym, eos_sym)
         t1 = time.time()
         tlist = beamsearch(models, seq, **option)
         t2 = time.time()
@@ -766,7 +773,7 @@ def sample(args):
             break
 
         data = [line]
-        seq, mask = processdata(data, svocab, unk_symbol, eos_symbol)
+        seq, mask = convert_data(data, svocab, unk_symbol, eos_symbol)
         t1 = time.time()
         seq = numpy.repeat(seq, batch, 1)
         mask = numpy.repeat(mask, batch, 1)
@@ -820,8 +827,8 @@ def replace(args):
     stream = textiterator(reader, [args.batch, args.batch])
 
     for data in stream:
-        xdata, xmask = processdata(data[0], svocab, unk_symbol, eos_symbol)
-        ydata, ymask = processdata(data[1], tvocab, unk_symbol, eos_symbol)
+        xdata, xmask = convert_data(data[0], svocab, unk_symbol, eos_symbol)
+        ydata, ymask = convert_data(data[1], tvocab, unk_symbol, eos_symbol)
 
         for i in range(num_models):
             # compute attention score
