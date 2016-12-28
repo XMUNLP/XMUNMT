@@ -4,4 +4,3 @@
 
 from reader import textreader
 from iterator import textiterator
-from plain import processdata, getlen

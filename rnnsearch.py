@@ -12,9 +12,10 @@ import argparse
 
 from metric import bleu
 from optimizer import optimizer
+from data import textreader, textiterator
+from data.plain import convert_data, get_length
 from model.rnnsearch import rnnsearch, beamsearch, batchsample
 from ops import random_uniform_initializer, trainable_variables
-from data import textreader, textiterator, convert_data, get_length
 
 
 def load_vocab(file):
@@ -63,7 +64,7 @@ def serialize(name, option):
 
     # restore
     if indices is not None:
-        option["indices"] = vals["indices"]
+        option["indices"] = indices
 
     fd.close()
 
@@ -85,21 +86,30 @@ def load_model(name):
 
 def restore_variables(values):
     variables = trainable_variables()
-    variables = dict((var.name, var) for var in variables)
-    values = dict(values)
+    var_dict = {}
+    val_dict = {}
+    not_restored = []
 
-    for name in variables:
-        var = variables[name]
+    for var in variables:
+        # abc/bcd => bcd, remove abc
+        name = "/".join(var.name.split("/")[1:])
+        var_dict[name] = var
 
-        # match name
-        if name in values:
-            value = values[name]
+    for (name, val) in values:
+        name = "/".join(name.split("/")[1:])
+        val_dict[name] = val
 
-        if var.get_value().shape != value.shape:
-            continue
+    for name in var_dict:
+        var = var_dict[name]
 
-        var.set_value(value)
-        sys.stderr.write("%s restored\n" % name)
+        if name in val_dict:
+            val = val_dict[name]
+            var.set_value(val)
+        else:
+            sys.stderr.write("%s NOT restored\n" % var.name)
+            not_restored.append(var)
+
+    return not_restored
 
 
 def set_variables(variables, values):
@@ -270,6 +280,10 @@ def parseargs_train(args):
     msg = "min translation length"
     parser.add_argument("--minlen", type=int, help=msg)
 
+    msg = "initialize from another model"
+    parser.add_argument("--initialize", type=str, help=msg)
+    msg = "fine tune model"
+    parser.add_argument("--finetune", type=int, help=msg)
     msg = "reset count"
     parser.add_argument("--reset", type=int, help=msg)
 
@@ -536,6 +550,10 @@ def train(args):
     else:
         init = True
 
+    if args.initialize:
+        params = load_model(args.initialize)
+        init = False
+
     override(option, args)
     print_option(option)
 
@@ -579,7 +597,16 @@ def train(args):
     model = rnnsearch(initializer=initializer, **option)
 
     if not init:
-        restore_variables(params)
+        params = restore_variables(params)
+    else:
+        params = None
+
+    # only tune part of variables
+    if not args.finetune:
+        params = None
+    else:
+        if not params:
+            raise ValueError("no variables to fine tune")
 
     print "parameters:", count_parameters()
 
@@ -589,6 +616,7 @@ def train(args):
     toption["variant"] = option["variant"]
     toption["constraint"] = ("norm", option["norm"])
     toption["norm"] = True
+    toption["variables"] = params
     trainer = optimizer(model, **toption)
     alpha = option["alpha"]
 
