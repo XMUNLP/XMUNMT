@@ -16,6 +16,7 @@ from data import textreader, textiterator
 from data.plain import convert_data, get_length
 from model.rnnsearch import rnnsearch, beamsearch, batchsample
 from ops import random_uniform_initializer, trainable_variables
+from ops import l1_regularizer, l2_regularizer, sum_regularizer
 
 
 def load_vocab(file):
@@ -33,11 +34,10 @@ def invert_vocab(vocab):
     return v
 
 
-def count_parameters():
+def count_parameters(variables):
     n = 0
-    params = trainable_variables()
 
-    for item in params:
+    for item in variables:
         v = item.get_value()
         n += v.size
 
@@ -81,35 +81,46 @@ def load_model(name):
     if "indices" in vals:
         option["indices"] = vals["indices"]
 
+    fd.close()
+
     return option, params
 
 
-def restore_variables(values):
-    variables = trainable_variables()
+def match_variables(variables, values, ignore_prefix=True):
     var_dict = {}
     val_dict = {}
-    not_restored = []
+    matched = []
+    not_matched = []
 
     for var in variables:
-        # abc/bcd => bcd, remove abc
-        name = "/".join(var.name.split("/")[1:])
+        if ignore_prefix:
+            name = "/".join(var.name.split("/")[1:])
         var_dict[name] = var
 
     for (name, val) in values:
-        name = "/".join(name.split("/")[1:])
+        if ignore_prefix:
+            name = "/".join(name.split("/")[1:])
         val_dict[name] = val
 
+    # matching
     for name in var_dict:
         var = var_dict[name]
 
         if name in val_dict:
             val = val_dict[name]
-            var.set_value(val)
+            matched.append([var, val])
         else:
-            sys.stderr.write("%s NOT restored\n" % var.name)
-            not_restored.append(var)
+            not_matched.append(var)
 
-    return not_restored
+    return matched, not_matched
+
+
+def restore_variables(matched, not_matched):
+    for var, val in matched:
+        var.set_value(val)
+
+    for var in not_matched:
+        sys.stderr.write("%s NOT restored\n" % var.name)
 
 
 def set_variables(variables, values):
@@ -128,6 +139,7 @@ def get_variables_with_prefix(prefix):
             new_list.append(var)
 
     return new_list
+
 
 
 def load_references(names, case=True):
@@ -244,6 +256,10 @@ def parseargs_train(args):
     parser.add_argument("--stop", type=int, help=msg)
     msg = "decay factor, default 0.5"
     parser.add_argument("--decay", type=float, help=msg)
+    msg = "L1 regularizer scale"
+    parser.add_argument("--l1-scale", type=float, help=msg)
+    msg = "L2 regularizer scale"
+    parser.add_argument("--l2-scale", type=float, help=msg)
 
     # validation
     msg = "random seed, default 1234"
@@ -283,10 +299,9 @@ def parseargs_train(args):
     msg = "initialize from another model"
     parser.add_argument("--initialize", type=str, help=msg)
     msg = "fine tune model"
-    parser.add_argument("--finetune", type=int, help=msg)
+    parser.add_argument("--finetune", action="store_true", help=msg)
     msg = "reset count"
-    parser.add_argument("--reset", type=int, help=msg)
-
+    parser.add_argument("--reset", action="store_true", help=msg)
     return parser.parse_args(args)
 
 
@@ -349,7 +364,7 @@ def parseargs_replace(args):
 
 
 # default options
-def get_option():
+def default_option():
     option = {}
 
     # training corpus and vocabulary
@@ -368,7 +383,6 @@ def get_option():
     option["batch"] = 128
     option["momentum"] = 0.0
     option["optimizer"] = "rmsprop"
-    option["variant"] = "graves"
     option["norm"] = 1.0
     option["stop"] = 0
     option["decay"] = 0.5
@@ -542,8 +556,15 @@ def get_filename(name):
 
 
 def train(args):
-    option = get_option()
+    option = default_option()
 
+    # predefined model names
+    pathname, basename = os.path.split(args.model)
+    modelname = get_filename(basename)
+    autoname = os.path.join(pathname, modelname + ".autosave.pkl")
+    bestname = os.path.join(pathname, modelname + ".best.pkl")
+
+    # load models
     if os.path.exists(args.model):
         option, params = load_model(args.model)
         init = False
@@ -551,28 +572,22 @@ def train(args):
         init = True
 
     if args.initialize:
-        params = load_model(args.initialize)
-        init = False
+        init_params = load_model(args.initialize)
+        init_params = init_params[1]
+        restore = True
+    else:
+        restore = False
 
     override(option, args)
     print_option(option)
 
-    # set seed
-    numpy.random.seed(option["seed"])
-
+    # load references
     if option["references"]:
         references = load_references(option["references"])
     else:
         references = None
 
-    svocabs, tvocabs = option["vocabulary"]
-    svocab, isvocab = svocabs
-    tvocab, itvocab = tvocabs
-
-    pathname, basename = os.path.split(args.model)
-    modelname = get_filename(basename)
-    autoname = os.path.join(pathname, modelname + ".autosave.pkl")
-    bestname = os.path.join(pathname, modelname + ".best.pkl")
+    # input corpus
     batch = option["batch"]
     sortk = option["sort"] or 1
     shuffle = option["seed"] if option["shuffle"] else None
@@ -593,45 +608,72 @@ def train(args):
     epoch = option["epoch"]
     maxepoch = option["maxepoch"]
 
+    # create model
+    regularizer = []
+
+    if args.l1_scale:
+        print "L1 regularizer added, scale: %s" % str(args.l1_scale)
+        regularizer.append(l1_regularizer(args.l1_scale))
+
+    if args.l2_scale:
+        print "L2 regularizer added, scale: %s" % str(args.l2_scale)
+        regularizer.append(l2_regularizer(args.l2_scale))
+
+    regularizer = sum_regularizer(regularizer)
+
     initializer = random_uniform_initializer(-0.08, 0.08)
-    model = rnnsearch(initializer=initializer, **option)
+    # set seed
+    numpy.random.seed(option["seed"])
+    model = rnnsearch(initializer=initializer, regularizer=regularizer,
+                      **option)
+
+    variables = None
+
+    if restore:
+        matched, not_matched = match_variables(trainable_variables(),
+                                               init_params)
+        if args.finetune:
+            variables = not_matched
+            if not variables:
+                raise RuntimeError("no variables to finetune")
 
     if not init:
-        params = restore_variables(params)
-    else:
-        params = None
+        set_variables(trainable_variables(), params)
 
-    # only tune part of variables
-    if not args.finetune:
-        params = None
-    else:
-        if not params:
-            raise ValueError("no variables to fine tune")
+    if restore:
+        restore_variables(matched, not_matched)
 
-    print "parameters:", count_parameters()
+    print "parameters:", count_parameters(trainable_variables())
 
     # tuning option
-    toption = {}
-    toption["algorithm"] = option["optimizer"]
-    toption["variant"] = option["variant"]
-    toption["constraint"] = ("norm", option["norm"])
-    toption["norm"] = True
-    toption["variables"] = params
-    trainer = optimizer(model, **toption)
-    alpha = option["alpha"]
+    tune_opt = {}
+    tune_opt["algorithm"] = option["optimizer"]
+    tune_opt["constraint"] = ("norm", option["norm"])
+    tune_opt["norm"] = True
+    tune_opt["variables"] = variables
+
+    # create optimizer
+    trainer = optimizer(model, **tune_opt)
 
     # beamsearch option
-    doption = {}
-    doption["beamsize"] = option["beamsize"]
-    doption["normalize"] = option["normalize"]
-    doption["maxlen"] = option["maxlen"]
-    doption["minlen"] = option["minlen"]
+    search_opt = {}
+    search_opt["beamsize"] = option["beamsize"]
+    search_opt["normalize"] = option["normalize"]
+    search_opt["maxlen"] = option["maxlen"]
+    search_opt["minlen"] = option["minlen"]
 
-    best_score = option["bleu"]
+    # vocabulary and special symbol
+    svocabs, tvocabs = option["vocabulary"]
+    svocab, isvocab = svocabs
+    tvocab, itvocab = tvocabs
     unk_sym = option["unk"]
     eos_sym = option["eos"]
+
+    # summary
     count = option["count"][0]
     totcost = option["cost"]
+    best_score = option["bleu"]
+    alpha = option["alpha"]
 
     for i in range(epoch, maxepoch):
         for data in stream:
@@ -659,7 +701,8 @@ def train(args):
 
             if count % option["vfreq"] == 0:
                 if option["validation"] and references:
-                    trans = translate(model, option["validation"], **doption)
+                    trans = translate(model, option["validation"],
+                                      **search_opt)
                     bleu_score = bleu(trans, references)
                     print "bleu: %2.4f" % bleu_score
                     if bleu_score > best_score:
@@ -676,7 +719,8 @@ def train(args):
                 sdata = data[0][ind]
                 tdata = data[1][ind]
                 xdata = xdata[:, ind : ind + 1]
-                hls = beamsearch(model, xdata)
+                xmask = xmask[:, ind : ind + 1]
+                hls = beamsearch(model, xdata, xmask)
                 best, score = hls[0]
                 print sdata
                 print tdata
@@ -686,7 +730,7 @@ def train(args):
         print "--------------------------------------------------"
 
         if option["validation"] and references:
-            trans = translate(model, option["validation"], **doption)
+            trans = translate(model, option["validation"], **search_opt)
             bleu_score = bleu(trans, references)
             print "iter: %d, bleu: %2.4f" % (i + 1, bleu_score)
             if bleu_score > best_score:

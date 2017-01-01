@@ -2,13 +2,13 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
+
+import ops
 import numpy
 import theano
-
 import updates
 import constraint
 
-from ops import trainable_variables
 from collections import OrderedDict
 
 
@@ -18,10 +18,16 @@ class optimizer:
         cost = model.cost
         inputs = model.inputs
         outputs = model.outputs
-        scan_updates = model.updates
 
         if "variables" not in option or not option["variables"]:
-            params = trainable_variables()
+            params = ops.trainable_variables()
+        else:
+            params = option["variables"]
+
+        regularization_loss = ops.get_regularization_loss()
+
+        if regularization_loss:
+            cost = cost + regularization_loss
 
         grads = theano.grad(cost, params)
         gradsref = grads
@@ -59,7 +65,7 @@ class optimizer:
         if option["norm"]:
             normval = constraint.global_norm(grads)
             outputs = outputs[:]
-            outputs.insert(1, normval)
+            outputs.append(normval)
 
         if option["constraint"]:
             method, value = option["constraint"]
@@ -82,6 +88,7 @@ class optimizer:
             option["momentum"] = False
 
         gup = []
+        scan_updates = ops.get_updates()
 
         # append update rules
         if isinstance(scan_updates, OrderedDict):

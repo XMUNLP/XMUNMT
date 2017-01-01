@@ -65,7 +65,7 @@ def adagrad_updates(params, grads, lr, epsilon):
     return sharedvars, updates
 
 
-def rmsprop_updates(params, grads, lr, rho, epsilon, variant="hinton"):
+def rmsprop_updates(params, grads, lr, rho, epsilon, variant="graves"):
     sharedvars = []
     updates = OrderedDict()
 
