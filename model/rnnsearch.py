@@ -30,7 +30,9 @@ def gru_encoder(cell, inputs, mask, initial_state=None, dtype=None):
         initial_state = theano.tensor.zeros([batch, state_size], dtype=dtype)
 
     seq = [inputs, mask]
-    states, updates = theano.scan(loop_fn, seq, [initial_state])
+    # ops.scan is a wrapper of theano.scan, which automatically add updates to
+    # optimizer, use theano.scan instead if you do not want this behavior
+    states = ops.scan(loop_fn, seq, [initial_state])
 
     return states
 
@@ -105,7 +107,7 @@ def decoder(cell, inputs, mask, initial_state, attention_states,
         seq = [inputs, mask]
         outputs_info = [initial_state, None]
         non_seq = [attention_states, attention_mask, mapped_states]
-        (states, contexts), updates = theano.scan(loop_fn, seq, outputs_info,
+        (states, contexts) = ops.scan(loop_fn, seq, outputs_info,
                                                   non_seq)
 
     return states, contexts
@@ -133,12 +135,16 @@ class rnnsearch:
         if "scope" not in option or option["scope"] is None:
             option["scope"] = "rnnsearch"
 
-        if "initializer" not in option or option["initializer"] is None:
+        if "initializer" not in option:
             option["initializer"] = None
+
+        if "regularizer" not in option:
+            option["regularizer"] = None
 
         dtype = theano.config.floatX
         scope = option["scope"]
         initializer = option["initializer"]
+        regularizer = option["regularizer"]
 
         def prediction(prev_inputs, prev_state, context):
             features = [prev_state, prev_inputs, context]
@@ -158,7 +164,8 @@ class rnnsearch:
             return probs
 
         # training graph
-        with ops.variable_scope(scope, initializer=initializer, dtype=dtype):
+        with ops.variable_scope(scope, initializer=initializer,
+                                regularizer=regularizer, dtype=dtype):
             src_seq = theano.tensor.imatrix("soruce_sequence")
             src_mask = theano.tensor.matrix("soruce_sequence_mask")
             tgt_seq = theano.tensor.imatrix("target_sequence")
@@ -293,7 +300,7 @@ class rnnsearch:
 
                 outputs_info = [None, initial_inputs, initial_state]
                 outputs, updates = theano.scan(sampling_loop, [], outputs_info,
-                                              n_steps=max_len)
+                                               n_steps=max_len)
                 sampled_words = outputs[0]
 
         sampling_inputs = [src_seq, src_mask, max_len]
@@ -315,8 +322,7 @@ class rnnsearch:
             with ops.variable_scope("decoder"):
                 seq = [target_inputs, tgt_mask]
                 outputs_info = [None, initial_state]
-                outputs, updates = theano.scan(attention_loop, seq,
-                                              outputs_info)
+                outputs = theano.scan(attention_loop, seq, outputs_info)
                 attention_score = outputs[0]
 
         alignment_inputs = [src_seq, src_mask, tgt_seq, tgt_mask]

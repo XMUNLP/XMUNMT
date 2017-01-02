@@ -36,8 +36,8 @@ def merge_updates(updates, new_updates):
     return updates
 
 
-def get_updates():
-    updates_list = get_collection(_SCAN_UPDATES_KEYS)
+def get_updates(key="training"):
+    updates_list = get_collection(_SCAN_UPDATES_KEYS + "/" + key)
 
     return reduce(merge_updates, [OrderedDict()] + list(updates_list))
 
@@ -46,6 +46,11 @@ def scan(fn, sequences=None, outputs_info=None, non_sequences=None, **kwargs):
     outputs, updates = theano.scan(fn, sequences, outputs_info, non_sequences,
                                    **kwargs)
 
-    add_to_collection(_SCAN_UPDATES_KEYS, updates)
+    if "key" not in kwargs or not kwargs["key"]:
+        key = "training"
+    else:
+        key = kwargs["key"]
+
+    add_to_collection(_SCAN_UPDATES_KEYS + "/" + key, updates)
 
     return outputs
