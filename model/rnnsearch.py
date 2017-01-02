@@ -85,7 +85,8 @@ def attention(query, mapped_states, state_size, attn_size, attention_mask=None,
 
 
 def decoder(cell, inputs, mask, initial_state, attention_states,
-            attention_mask, attn_size, dtype=None, scope=None):
+            attention_mask, attn_size, mapped_states=None, dtype=None,
+            scope=None):
     input_size, states_size = cell.input_size
 
     output_size = cell.output_size
@@ -102,8 +103,9 @@ def decoder(cell, inputs, mask, initial_state, attention_states,
         return [next_state, context]
 
     with ops.variable_scope(scope or "decoder"):
-        mapped_states = map_attention_states(attention_states, states_size,
-                                             attn_size)
+        if mapped_states is None:
+            mapped_states = map_attention_states(attention_states, states_size,
+                                                 attn_size)
         seq = [inputs, mask]
         outputs_info = [initial_state, None]
         non_seq = [attention_states, attention_mask, mapped_states]
@@ -141,8 +143,12 @@ class rnnsearch:
         if "regularizer" not in option:
             option["regularizer"] = None
 
+        if "criterion" not in option:
+            option["criterion"] = "mle"
+
         dtype = theano.config.floatX
         scope = option["scope"]
+        criterion = option["criterion"]
         initializer = option["initializer"]
         regularizer = option["regularizer"]
 
@@ -170,6 +176,10 @@ class rnnsearch:
             src_mask = theano.tensor.matrix("soruce_sequence_mask")
             tgt_seq = theano.tensor.imatrix("target_sequence")
             tgt_mask = theano.tensor.matrix("target_sequence_mask")
+
+            if criterion == "mrt":
+                loss = theano.tensor.vector("loss_score")
+                sharp = theano.tensor.scalar("sharpness")
 
             with ops.variable_scope("source_embedding"):
                 source_embedding = ops.get_variable("embedding",
@@ -201,16 +211,37 @@ class rnnsearch:
 
             # run decoder
             cell = nn.rnn_cell.gru_cell([[tedim, 2 * shdim], thdim])
-            decoder_outputs = decoder(cell, target_inputs, tgt_mask,
-                                      initial_state, annotation, src_mask,
-                                      ahdim)
-            all_output, all_context = decoder_outputs
 
+            if criterion == "mrt":
+                # In MRT training, shape of src_seq and src_mask are assumed
+                # to have [len, 1]
+                batch = tgt_seq.shape[1]
+                with ops.variable_scope("decoder"):
+                    mapped_states = map_attention_states(annotation, 2 * shdim,
+                                                         ahdim)
+                b_src_mask = theano.tensor.repeat(src_mask, batch, 1)
+                b_annotation = theano.tensor.repeat(annotation, batch, 1)
+                b_mapped_states = theano.tensor.repeat(mapped_states, batch, 1)
+                b_initial_state = theano.tensor.repeat(initial_state, batch, 0)
+
+                decoder_outputs = decoder(cell, target_inputs, tgt_mask,
+                                          b_initial_state, b_annotation,
+                                          b_src_mask, ahdim, b_mapped_states)
+            else:
+                decoder_outputs = decoder(cell, target_inputs, tgt_mask,
+                                          initial_state, annotation, src_mask,
+                                          ahdim)
+
+            all_output, all_context = decoder_outputs
             shift_inputs = theano.tensor.zeros_like(target_inputs)
             shift_inputs = theano.tensor.set_subtensor(shift_inputs[1:],
                                                        target_inputs[:-1])
 
-            init_state = initial_state[None, :, :]
+            if criterion == "mrt":
+                init_state = b_initial_state[None, :, :]
+            else:
+                init_state = initial_state[None, :, :]
+
             all_states = theano.tensor.concatenate([init_state, all_output], 0)
             prev_states = all_states[:-1]
 
@@ -219,12 +250,28 @@ class rnnsearch:
 
             # compute cost
             idx = theano.tensor.arange(tgt_seq.flatten().shape[0])
-            cost = -theano.tensor.log(probs[idx, tgt_seq.flatten()])
-            cost = cost.reshape(tgt_seq.shape)
-            cost = theano.tensor.sum(cost * tgt_mask, 0)
-            cost = theano.tensor.mean(cost)
+            ce = -theano.tensor.log(probs[idx, tgt_seq.flatten()])
+            ce = ce.reshape(tgt_seq.shape)
+            ce = theano.tensor.sum(ce * tgt_mask, 0)
 
-        training_inputs = [src_seq, src_mask, tgt_seq, tgt_mask]
+            if criterion == "mle":
+                cost = theano.tensor.mean(ce)
+            else:
+                # ce is positive here
+                logp = -ce
+                score = sharp * logp
+                # safe softmax
+                score = score - theano.tensor.min(score)
+                score = theano.tensor.exp(score)
+                qprob = score / theano.tensor.sum(score)
+                risk = theano.tensor.sum(qprob * loss)
+                cost = risk
+
+        if criterion == "mle":
+            training_inputs = [src_seq, src_mask, tgt_seq, tgt_mask]
+        else:
+            training_inputs = [src_seq, src_mask, tgt_seq, tgt_mask, loss,
+                               sharp]
         training_outputs = [cost]
         evaluate = theano.function(training_inputs, training_outputs)
 
@@ -282,9 +329,9 @@ class rnnsearch:
 
             max_len = theano.tensor.iscalar()
 
-            def sampling_loop(inputs, state):
-                alpha = attention(state, mapped_states, shdim, ahdim, src_mask)
-                context = theano.tensor.sum(alpha[:, :, None] * annotation, 0)
+            def sampling_loop(inputs, state, attn_states, attn_mask, m_states):
+                alpha = attention(state, m_states, shdim, ahdim, attn_mask)
+                context = theano.tensor.sum(alpha[:, :, None] * attn_states, 0)
                 probs = prediction(inputs, state, context)
                 next_words = stream.multinomial(pvals=probs).argmax(axis=1)
                 new_inputs = nn.embedding_lookup(target_embedding, next_words)
@@ -299,8 +346,9 @@ class rnnsearch:
                                                      dtype=dtype)
 
                 outputs_info = [None, initial_inputs, initial_state]
+                nonseq = [annotation, src_mask, mapped_states]
                 outputs, updates = theano.scan(sampling_loop, [], outputs_info,
-                                               n_steps=max_len)
+                                               nonseq, n_steps=max_len)
                 sampled_words = outputs[0]
 
         sampling_inputs = [src_seq, src_mask, max_len]
@@ -310,10 +358,11 @@ class rnnsearch:
 
         # attention graph, this feature is optional
         with ops.variable_scope(scope, reuse=True):
-            def attention_loop(inputs, mask, state):
+            def attention_loop(inputs, mask, state, attn_states, attn_mask,
+                               m_states):
                 mask = mask[:, None]
-                alpha = attention(state, mapped_states, shdim, ahdim, src_mask)
-                context = theano.tensor.sum(alpha[:, :, None] * annotation, 0)
+                alpha = attention(state, m_states, shdim, ahdim, attn_mask)
+                context = theano.tensor.sum(alpha[:, :, None] * attn_states, 0)
                 output, next_state = cell([inputs, context], state)
                 next_state = (1.0 - mask) * state + mask * next_state
 
@@ -322,7 +371,9 @@ class rnnsearch:
             with ops.variable_scope("decoder"):
                 seq = [target_inputs, tgt_mask]
                 outputs_info = [None, initial_state]
-                outputs = theano.scan(attention_loop, seq, outputs_info)
+                nonseq = [annotation, src_mask, mapped_states]
+                outputs = theano.scan(attention_loop, seq, outputs_info,
+                                      nonseq)
                 attention_score = outputs[0]
 
         alignment_inputs = [src_seq, src_mask, tgt_seq, tgt_mask]
@@ -482,9 +533,8 @@ def batchsample(model, seq, mask, maxlen=None):
     sampler = model.sample
 
     vocabulary = model.option["vocabulary"]
-    eos = model.option["eos"]
+    eosid = model.option["eosid"]
     vocab = vocabulary[1][1]
-    eosid = vocabulary[1][0][eos]
 
     if maxlen == None:
         maxlen = int(len(seq) * 1.5)

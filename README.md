@@ -1,6 +1,7 @@
 # RNNsearch
 An implementation of RNNsearch using Theano, the implementation is the same
-with [GroundHog](https://github.com/lisa-groundhog/GroundHog)
+with [GroundHog](https://github.com/lisa-groundhog/GroundHog). You can find
+a simplified version at [here](https://github.com/Playinf/nmt)
 
 
 ## Usage
@@ -48,6 +49,11 @@ python scripts/build_dictionary.py zh.txt en.txt align.txt dict.zh-en
     --freq 1000 --vfreq 1500 --sfreq 50 --sort 20 --validation nist02.src
     --references nist02.ref0 nist02.ref1 nist02.ref2 nist02.ref3
     --initialize nmt.best.pkl
+```
+* Refine model with Minimum Risk Training (MRT)
+```
+  python rnnsearch.py train --model nmt.best.pkl --criterion mrt
+    --optimizer sgd --alpha 0.05 --sample 100 --sharp 5e-3 --reset
 ```
 * Resume training
 ```

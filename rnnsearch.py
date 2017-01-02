@@ -191,6 +191,27 @@ def load_dictionary(filename):
     return newmapping
 
 
+def build_sample_space(refs, examples):
+    space = {}
+
+    for ref in refs:
+        space[ref] = 1
+
+    for example in examples:
+        # remove empty
+        if len(example) == 0:
+            continue
+
+        example = " ".join(example)
+
+        if example in space:
+            continue
+
+        space[example] = 1
+
+    return list(space.iterkeys())
+
+
 def translate(model, corpus, **opt):
     fd = open(corpus, "r")
     svocab = model.option["vocabulary"][0][0]
@@ -256,6 +277,8 @@ def parseargs_train(args):
     parser.add_argument("--stop", type=int, help=msg)
     msg = "decay factor, default 0.5"
     parser.add_argument("--decay", type=float, help=msg)
+    msg = "initialization scale, default 0.08"
+    parser.add_argument("--scale", type=float, help=msg)
     msg = "L1 regularizer scale"
     parser.add_argument("--l1-scale", type=float, help=msg)
     msg = "L2 regularizer scale"
@@ -277,7 +300,6 @@ def parseargs_train(args):
     msg = "source and target sentence limit, default 50 (both), 0 to disable"
     parser.add_argument("--limit", type=int, nargs='+', help=msg)
 
-
     # control frequency
     msg = "save frequency, default 1000"
     parser.add_argument("--freq", type=int, help=msg)
@@ -296,12 +318,22 @@ def parseargs_train(args):
     msg = "min translation length"
     parser.add_argument("--minlen", type=int, help=msg)
 
+    # mrt training
+    msg = "criterion, mle or mrt"
+    parser.add_argument("--criterion", type=str, help=msg)
+    msg = "sample space size"
+    parser.add_argument("--sample", type=int, help=msg)
+    msg = "sharpness parameter"
+    parser.add_argument("--sharp", type=float, help=msg)
+
+    # misc
     msg = "initialize from another model"
     parser.add_argument("--initialize", type=str, help=msg)
     msg = "fine tune model"
     parser.add_argument("--finetune", action="store_true", help=msg)
     msg = "reset count"
     parser.add_argument("--reset", action="store_true", help=msg)
+
     return parser.parse_args(args)
 
 
@@ -309,7 +341,6 @@ def parseargs_decode(args):
     msg = "translate using exsiting nmt model"
     usage = "rnnsearch.py translate [<args>] [-h | --help]"
     parser = argparse.ArgumentParser(description=msg, usage=usage)
-
 
     msg = "trained model"
     parser.add_argument("--model", nargs="+", required=True, help=msg)
@@ -386,6 +417,9 @@ def default_option():
     option["norm"] = 1.0
     option["stop"] = 0
     option["decay"] = 0.5
+    option["scale"] = 0.08
+    option["l1_scale"] = None
+    option["l2_scale"] = None
 
     # runtime information
     option["cost"] = 0.0
@@ -415,38 +449,51 @@ def default_option():
     option["unk"] = "UNK"
     option["eos"] = "<eos>"
 
+    # criterion
+    option["criterion"] = "mle"
+    option["sample"] = 100
+    option["sharp"] = 5e-3
+
     return option
 
 
-def override_if_not_none(option, args, key):
-    value = args.__dict__[key]
-    option[key] = value if value != None else option[key]
+def args_to_dict(args):
+    return args.__dict__
+
+
+def override_if_not_none(opt1, opt2, key):
+    if key in opt2:
+        value = opt2[key]
+    else:
+        value = None
+
+    opt1[key] = value if value != None else opt1[key]
 
 
 # override default options
 def override(option, args):
 
     # training corpus
-    if args.corpus == None and option["corpus"] == None:
+    if args["corpus"] == None and option["corpus"] == None:
         raise ValueError("error: no training corpus specified")
 
     # vocabulary
-    if args.vocab == None and option["vocab"] == None:
+    if args["vocab"] == None and option["vocab"] == None:
         raise ValueError("error: no training vocabulary specified")
 
-    if args.limit and len(args.limit) > 2:
+    if args["limit"] and len(args["limit"]) > 2:
         raise ValueError("error: invalid number of --limit argument (<=2)")
 
-    if args.limit and len(args.limit) == 1:
-        args.limit = args.limit * 2
+    if args["limit"] and len(args["limit"]) == 1:
+        args["limit"] = args["limit"] * 2
 
     override_if_not_none(option, args, "corpus")
 
     # vocabulary and model paramters cannot be overrided
     if option["vocab"] == None:
-        option["vocab"] = args.vocab
-        svocab = load_vocab(args.vocab[0])
-        tvocab = load_vocab(args.vocab[1])
+        option["vocab"] = args["vocab"]
+        svocab = load_vocab(args["vocab"][0])
+        tvocab = load_vocab(args["vocab"][1])
         isvocab = invert_vocab(svocab)
         itvocab = invert_vocab(tvocab)
 
@@ -480,23 +527,37 @@ def override(option, args):
     override_if_not_none(option, args, "norm")
     override_if_not_none(option, args, "stop")
     override_if_not_none(option, args, "decay")
+    override_if_not_none(option, args, "scale")
+    override_if_not_none(option, args, "l1_scale")
+    override_if_not_none(option, args, "l2_scale")
 
     # runtime information
-    override_if_not_none(option, args, "validation")
-    override_if_not_none(option, args, "references")
+    override_if_not_none(option, args, "cost")
+    override_if_not_none(option, args, "count")
+    override_if_not_none(option, args, "epoch")
+    override_if_not_none(option, args, "maxepoch")
+    override_if_not_none(option, args, "sort")
+    override_if_not_none(option, args, "shuffle")
+    override_if_not_none(option, args, "limit")
     override_if_not_none(option, args, "freq")
     override_if_not_none(option, args, "vfreq")
     override_if_not_none(option, args, "sfreq")
     override_if_not_none(option, args, "seed")
-    override_if_not_none(option, args, "sort")
-    override_if_not_none(option, args, "shuffle")
-    override_if_not_none(option, args, "limit")
+    override_if_not_none(option, args, "validation")
+    override_if_not_none(option, args, "references")
+    override_if_not_none(option, args, "bleu")
+    override_if_not_none(option, args, "indices")
 
     # beamsearch
     override_if_not_none(option, args, "beamsize")
     override_if_not_none(option, args, "normalize")
     override_if_not_none(option, args, "maxlen")
     override_if_not_none(option, args, "minlen")
+
+    # training criterion
+    override_if_not_none(option, args, "criterion")
+    override_if_not_none(option, args, "sample")
+    override_if_not_none(option, args, "sharp")
 
 
 def print_option(option):
@@ -524,6 +585,9 @@ def print_option(option):
     print "norm:", option["norm"]
     print "stop:", option["stop"]
     print "decay:", option["decay"]
+    print "scale:", option["scale"]
+    print "L1-scale:", option["l1_scale"]
+    print "L2-scale:", option["l2_scale"]
 
     print "validation:", option["validation"]
     print "references:", option["references"]
@@ -539,6 +603,11 @@ def print_option(option):
     print "normalize:", option["normalize"]
     print "maxlen:", option["maxlen"]
     print "minlen:", option["minlen"]
+
+    # training criterion
+    print "criterion:", option["criterion"]
+    print "sample:", option["sample"]
+    print "sharp:", option["sharp"]
 
     # special symbols
     print "unk:", option["unk"]
@@ -566,7 +635,8 @@ def train(args):
 
     # load models
     if os.path.exists(args.model):
-        option, params = load_model(args.model)
+        opt, params = load_model(args.model)
+        override(option, opt)
         init = False
     else:
         init = True
@@ -578,7 +648,7 @@ def train(args):
     else:
         restore = False
 
-    override(option, args)
+    override(option, args_to_dict(args))
     print_option(option)
 
     # load references
@@ -587,9 +657,14 @@ def train(args):
     else:
         references = None
 
+    criterion = option["criterion"]
+
+    if criterion == "mrt":
+        sys.stderr.write("warning: In MRT mode, batch is set to 1\n")
+
     # input corpus
-    batch = option["batch"]
-    sortk = option["sort"] or 1
+    batch = option["batch"] if criterion == "mle" else 1
+    sortk = option["sort"] or 1 if criterion == "mle" else 1
     shuffle = option["seed"] if option["shuffle"] else None
     reader = textreader(option["corpus"], shuffle)
     processor = [get_length, get_length]
@@ -611,17 +686,14 @@ def train(args):
     # create model
     regularizer = []
 
-    if args.l1_scale:
-        print "L1 regularizer added, scale: %s" % str(args.l1_scale)
-        regularizer.append(l1_regularizer(args.l1_scale))
+    if option["l1_scale"]:
+        regularizer.append(l1_regularizer(option["l1_scale"]))
 
-    if args.l2_scale:
-        print "L2 regularizer added, scale: %s" % str(args.l2_scale)
-        regularizer.append(l2_regularizer(args.l2_scale))
+    if option["l2_scale"]:
+        regularizer.append(l2_regularizer(option["l2_scale"]))
 
+    initializer = random_uniform_initializer(-option["scale"], option["scale"])
     regularizer = sum_regularizer(regularizer)
-
-    initializer = random_uniform_initializer(-0.08, 0.08)
     # set seed
     numpy.random.seed(option["seed"])
     model = rnnsearch(initializer=initializer, regularizer=regularizer,
@@ -674,22 +746,60 @@ def train(args):
     totcost = option["cost"]
     best_score = option["bleu"]
     alpha = option["alpha"]
+    sharp = option["sharp"]
 
     for i in range(epoch, maxepoch):
         for data in stream:
             xdata, xmask = convert_data(data[0], svocab, unk_sym, eos_sym)
             ydata, ymask = convert_data(data[1], tvocab, unk_sym, eos_sym)
 
-            t1 = time.time()
-            cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
-            trainer.update(alpha = alpha)
-            t2 = time.time()
+            if criterion == "mrt":
+                refs = []
 
-            count += 1
+                for item in data[1]:
+                    item = item.split()
+                    item = [unk_sym if word not in tvocab else word
+                            for word in item]
+                    refs.append(" ".join(item))
 
-            cost = cost * ymask.shape[1] / ymask.sum()
-            totcost += cost / math.log(2)
-            print i + 1, count, cost, norm, t2 - t1
+                t1 = time.time()
+
+                # sample from model
+                nsample = option["sample"] - len(refs)
+                xdata = numpy.repeat(xdata, nsample, 1)
+                xmask = numpy.repeat(xmask, nsample, 1)
+                maxlen = int(1.5 * len(ydata))
+                examples = batchsample(model, xdata, xmask, maxlen)
+                space = build_sample_space(refs, examples)
+                score = numpy.zeros((len(space),), "float32")
+
+                refs = [ref.split() for ref in refs]
+
+                for j in range(len(space)):
+                    example = space[j].split()
+                    score[j] = 1.0 - bleu([example], [refs], smooth=True)
+
+                ydata, ymask = convert_data(space, tvocab, unk_sym, eos_sym)
+                cost, norm = trainer.optimize(xdata[:, 0:1], xmask[:, 0:1],
+                                              ydata, ymask, score, sharp)
+                trainer.update(alpha=alpha)
+                t2 = time.time()
+
+                totcost += cost
+                count += 1
+                t = t2 - t1
+                ac = totcost / count
+                print i + 1, count, len(space), cost, norm, ac, t
+            else:
+                t1 = time.time()
+                cost, norm = trainer.optimize(xdata, xmask, ydata, ymask)
+                trainer.update(alpha = alpha)
+                t2 = time.time()
+
+                count += 1
+                cost = cost * ymask.shape[1] / ymask.sum()
+                totcost += cost / math.log(2)
+                print i + 1, count, cost, norm, t2 - t1
 
             # autosave
             if count % option["freq"] == 0:
