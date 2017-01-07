@@ -84,9 +84,27 @@ def brevity_penalty(trans, refs, mode="closest"):
     return bp
 
 
+def smoothing_count(count1, count2, mode):
+    if not mode:
+        return count1, count2
+
+    if mode == "add_one":
+        n = len(count1)
+        for i in range(n):
+            if i > 0:
+                count1[i] += 1
+                count2[i] += 1
+    else:
+        val = int(any(map(lambda x: x == 0, count1)))
+        count1 = map(lambda x: x + val, count1)
+        count2 = map(lambda x: x + val, count2)
+
+    return count1, count2
+
+
 # trans: a list of tokenized sentence
 # refs: a list of list of tokenized reference sentences
-def bleu(trans, refs, bp="closest", smooth=False, n=4, weight=None):
+def bleu(trans, refs, bp="closest", smoothing=False, n=4, weight=None):
     p_norm = [0 for i in range(n)]
     p_denorm = [0 for i in range(n)]
 
@@ -98,12 +116,9 @@ def bleu(trans, refs, bp="closest", smooth=False, n=4, weight=None):
 
     bleu_n = [0 for i in range(n)]
 
-    for i in range(n):
-        # add one smoothing
-        if smooth and i > 0:
-            p_norm[i] += 1
-            p_denorm[i] += 1
+    p_norm, p_denorm = smoothing_count(p_norm, p_denorm, smoothing)
 
+    for i in range(n):
         if p_norm[i] == 0 or p_denorm[i] == 0:
             bleu_n[i] = -9999
         else:

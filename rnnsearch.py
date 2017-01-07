@@ -777,7 +777,7 @@ def train(args):
 
                 for j in range(len(space)):
                     example = space[j].split()
-                    score[j] = 1.0 - bleu([example], [refs], smooth=True)
+                    score[j] = 1.0 - bleu([example], [refs], smoothing=True)
 
                 ydata, ymask = convert_data(space, tvocab, unk_sym, eos_sym)
                 cost, norm = trainer.optimize(xdata[:, 0:1], xmask[:, 0:1],

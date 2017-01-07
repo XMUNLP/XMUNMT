@@ -53,3 +53,37 @@ def uniform_unit_scaling_initializer(factor=1.0, dtype=theano.config.floatX):
 
     return _initializer
 
+
+def random_normal_initializer(mean=0.0, stddev=1.0,
+                              dtype=theano.config.floatX):
+
+    def _initializer(shape, dtype=dtype):
+        return numpy.random.normal(mean, stddev, size=shape).astype(dtype)
+    return _initializer
+
+
+def orthogonal_initializer(gain=1.0, dtype=theano.config.floatX):
+    def _initializer(shape, dtype=dtype):
+        if len(shape) < 2:
+            raise ValueError("the tensor to initialize must be at least"
+                             "two-dimensional")
+
+        num_rows = 1
+
+        for dim in shape[:-1]:
+            num_rows *= dim
+
+        num_cols = shape[-1]
+        flat_shape = (num_rows, num_cols)
+
+        a = numpy.random.randn(flat_shape).astype(dtype)
+
+        u, s, v = numpy.linalg.svd(a)
+
+        if num_rows > num_cols:
+            q = u
+        else:
+            q = v.transpose()
+        return gain * numpy.reshape(q, shape)
+
+    return _initializer

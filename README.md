@@ -1,7 +1,7 @@
 # RNNsearch
 An implementation of RNNsearch using Theano, the implementation is the same
 with [GroundHog](https://github.com/lisa-groundhog/GroundHog). You can find
-a simplified version at [here](https://github.com/Playinf/nmt)
+a simplified version at [here](https://github.com/Playinf/nmt).
 
 
 ## Usage
