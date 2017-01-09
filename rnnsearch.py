@@ -3,6 +3,7 @@
 # email: playinf@stu.xmu.edu.cn
 
 import os
+import ops
 import sys
 import math
 import time
@@ -13,10 +14,8 @@ import argparse
 from metric import bleu
 from optimizer import optimizer
 from data import textreader, textiterator
-from data.plain import convert_data, get_length
+from data.plain import convert_data, data_length
 from model.rnnsearch import rnnsearch, beamsearch, batchsample
-from ops import random_uniform_initializer, trainable_variables
-from ops import l1_regularizer, l2_regularizer, sum_regularizer
 
 
 def load_vocab(file):
@@ -46,7 +45,7 @@ def count_parameters(variables):
 
 def serialize(name, option):
     fd = open(name, "w")
-    params = trainable_variables()
+    params = ops.trainable_variables()
     names = [p.name for p in params]
     vals = dict([(p.name, p.get_value()) for p in params])
 
@@ -131,7 +130,7 @@ def set_variables(variables, values):
 
 
 def get_variables_with_prefix(prefix):
-    var_list = trainable_variables()
+    var_list = ops.trainable_variables()
     new_list = []
 
     for var in var_list:
@@ -139,7 +138,6 @@ def get_variables_with_prefix(prefix):
             new_list.append(var)
 
     return new_list
-
 
 
 def load_references(names, case=True):
@@ -333,6 +331,8 @@ def parseargs_train(args):
     parser.add_argument("--finetune", action="store_true", help=msg)
     msg = "reset count"
     parser.add_argument("--reset", action="store_true", help=msg)
+    msg = "disable validation"
+    parser.add_argument("--no-validation", action="store_true", help=msg)
 
     return parser.parse_args(args)
 
@@ -394,7 +394,6 @@ def parseargs_replace(args):
     return parser.parse_args(args)
 
 
-# default options
 def default_option():
     option = {}
 
@@ -657,6 +656,9 @@ def train(args):
     else:
         references = None
 
+    if args.no_validation:
+        references = None
+
     criterion = option["criterion"]
 
     if criterion == "mrt":
@@ -667,7 +669,7 @@ def train(args):
     sortk = option["sort"] or 1 if criterion == "mle" else 1
     shuffle = option["seed"] if option["shuffle"] else None
     reader = textreader(option["corpus"], shuffle)
-    processor = [get_length, get_length]
+    processor = [data_length, data_length]
     stream = textiterator(reader, [batch, batch * sortk], processor,
                           option["limit"], option["sort"])
 
@@ -687,13 +689,14 @@ def train(args):
     regularizer = []
 
     if option["l1_scale"]:
-        regularizer.append(l1_regularizer(option["l1_scale"]))
+        regularizer.append(ops.l1_regularizer(option["l1_scale"]))
 
     if option["l2_scale"]:
-        regularizer.append(l2_regularizer(option["l2_scale"]))
+        regularizer.append(ops.l2_regularizer(option["l2_scale"]))
 
-    initializer = random_uniform_initializer(-option["scale"], option["scale"])
-    regularizer = sum_regularizer(regularizer)
+    scale = option["scale"]
+    initializer = ops.random_uniform_initializer(-scale, scale)
+    regularizer = ops.sum_regularizer(regularizer)
     # set seed
     numpy.random.seed(option["seed"])
     model = rnnsearch(initializer=initializer, regularizer=regularizer,
@@ -702,7 +705,7 @@ def train(args):
     variables = None
 
     if restore:
-        matched, not_matched = match_variables(trainable_variables(),
+        matched, not_matched = match_variables(ops.trainable_variables(),
                                                init_params)
         if args.finetune:
             variables = not_matched
@@ -710,12 +713,12 @@ def train(args):
                 raise RuntimeError("no variables to finetune")
 
     if not init:
-        set_variables(trainable_variables(), params)
+        set_variables(ops.trainable_variables(), params)
 
     if restore:
         restore_variables(matched, not_matched)
 
-    print "parameters:", count_parameters(trainable_variables())
+    print "parameters:", count_parameters(ops.trainable_variables())
 
     # tuning option
     tune_opt = {}
@@ -935,7 +938,7 @@ def decode(args):
 def sample(args):
     option, values = load_model(args.model)
     model = rnnsearch(**option)
-    set_variables(trainable_variables(), values)
+    set_variables(ops.trainable_variables(), values)
 
     svocabs, tvocabs = model.option["vocabulary"]
     unk_symbol = model.option["unk"]

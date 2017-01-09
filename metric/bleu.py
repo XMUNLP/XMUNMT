@@ -84,7 +84,7 @@ def brevity_penalty(trans, refs, mode="closest"):
     return bp
 
 
-def smoothing_count(count1, count2, mode):
+def smooth_count(count1, count2, mode):
     if not mode:
         return count1, count2
 
@@ -116,7 +116,7 @@ def bleu(trans, refs, bp="closest", smoothing=False, n=4, weight=None):
 
     bleu_n = [0 for i in range(n)]
 
-    p_norm, p_denorm = smoothing_count(p_norm, p_denorm, smoothing)
+    p_norm, p_denorm = smooth_count(p_norm, p_denorm, smoothing)
 
     for i in range(n):
         if p_norm[i] == 0 or p_denorm[i] == 0:

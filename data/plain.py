@@ -5,10 +5,10 @@
 import numpy
 
 
-__all__ = ["get_length", "convert_data"]
+__all__ = ["data_length", "convert_data"]
 
 
-def get_length(line):
+def data_length(line):
     return len(line.strip().split())
 
 
