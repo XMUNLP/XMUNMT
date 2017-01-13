@@ -331,8 +331,8 @@ def parseargs_train(args):
     parser.add_argument("--finetune", action="store_true", help=msg)
     msg = "reset count"
     parser.add_argument("--reset", action="store_true", help=msg)
-    msg = "disable validation"
-    parser.add_argument("--no-validation", action="store_true", help=msg)
+    msg = "skip validation phase"
+    parser.add_argument("--skip-val", action="store_true", help=msg)
 
     return parser.parse_args(args)
 
@@ -656,7 +656,7 @@ def train(args):
     else:
         references = None
 
-    if args.no_validation:
+    if args.skip_val:
         references = None
 
     criterion = option["criterion"]

@@ -372,9 +372,9 @@ class rnnsearch:
                 seq = [target_inputs, tgt_mask]
                 outputs_info = [None, initial_state]
                 nonseq = [annotation, src_mask, mapped_states]
-                outputs = theano.scan(attention_loop, seq, outputs_info,
-                                      nonseq)
-                attention_score = outputs[0]
+                (alpha, state), updaptes = theano.scan(attention_loop, seq,
+                                                       outputs_info, nonseq)
+                attention_score = alpha
 
         alignment_inputs = [src_seq, src_mask, tgt_seq, tgt_mask]
         alignment_outputs = attention_score
