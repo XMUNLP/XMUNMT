@@ -4,7 +4,9 @@
 
 import rnn_cell
 
+from dropout import dropout
 from nn import embedding_lookup, linear, feedforward, maxout
 
 
-__all__ = ["embedding_lookup", "linear", "feedforward", "maxout", "rnn_cell"]
+__all__ = ["embedding_lookup", "linear", "feedforward", "maxout", "rnn_cell",
+           "dropout"]

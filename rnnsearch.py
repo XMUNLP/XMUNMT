@@ -281,6 +281,8 @@ def parseargs_train(args):
     parser.add_argument("--l1-scale", type=float, help=msg)
     msg = "L2 regularizer scale"
     parser.add_argument("--l2-scale", type=float, help=msg)
+    msg = "dropout keep probability"
+    parser.add_argument("--keep-prob", type=float, help=msg)
 
     # validation
     msg = "random seed, default 1234"
@@ -419,6 +421,7 @@ def default_option():
     option["scale"] = 0.08
     option["l1_scale"] = None
     option["l2_scale"] = None
+    option["keep_prob"] = None
 
     # runtime information
     option["cost"] = 0.0
@@ -529,6 +532,7 @@ def override(option, args):
     override_if_not_none(option, args, "scale")
     override_if_not_none(option, args, "l1_scale")
     override_if_not_none(option, args, "l2_scale")
+    override_if_not_none(option, args, "keep_prob")
 
     # runtime information
     override_if_not_none(option, args, "cost")
@@ -587,6 +591,7 @@ def print_option(option):
     print "scale:", option["scale"]
     print "L1-scale:", option["l1_scale"]
     print "L2-scale:", option["l2_scale"]
+    print "keep-prob:", option["keep_prob"]
 
     print "validation:", option["validation"]
     print "references:", option["references"]
