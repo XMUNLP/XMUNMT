@@ -56,6 +56,9 @@ def scan(fn, sequences=None, outputs_info=None, non_sequences=None,
 
     # support nested structure for sequences, outputs_info and non_sequences
     if use_extension:
+        if isinstance(outputs_info, dict):
+            raise ValueError("only support nested structure, not dict")
+
         nest_sequences = sequences
         nest_outputs_info = outputs_info
         nest_non_sequences = non_sequences

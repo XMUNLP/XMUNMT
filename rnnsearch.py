@@ -14,8 +14,9 @@ import argparse
 from metric import bleu
 from optimizer import optimizer
 from data import textreader, textiterator
+from data.align import convert_align
 from data.plain import convert_data, data_length
-from model.rnnsearch import rnnsearch, beamsearch, batchsample
+from model.rnnsearch import rnnsearch, beamsearch, batchsample, evaluate_model
 
 
 def load_vocab(file):
@@ -392,6 +393,27 @@ def parseargs_replace(args):
     parser.add_argument("--batch", type=int, default=128, help=msg)
     msg = "use arithmetic mean instead of geometric mean"
     parser.add_argument("--arithmetic", action="store_true", help=msg)
+
+    return parser.parse_args(args)
+
+
+def parseargs_evaluate(args):
+    msg = "evaluate a given model"
+    usage = "rnnsearch.py evaluate [<args>] [-h | --help]"
+    parser = argparse.ArgumentParser(description=msg, usage=usage)
+
+    msg = "trained model"
+    parser.add_argument("--model", required=True, help=msg)
+    msg = "batch size"
+    parser.add_argument("--batch", default=128, type=int, help=msg)
+    msg = "source file"
+    parser.add_argument("--source", type=str, required=True, help=msg)
+    msg = "target file"
+    parser.add_argument("--target", type=str, required=True, help=msg)
+    msg = "alignment file"
+    parser.add_argument("--align", type=str, help=msg)
+    msg = "print more informations"
+    parser.add_argument("--verbose", action="store_true", help=msg)
 
     return parser.parse_args(args)
 
@@ -1075,6 +1097,49 @@ def replace(args):
     stream.close()
 
 
+def evaluate(args):
+    option, params = load_model(args.model)
+    model = rnnsearch(**option)
+    var_list = ops.trainable_variables()
+    set_variables(var_list, params)
+
+    # use the first model
+    svocabs, tvocabs = model.option["vocabulary"]
+    unk_symbol = model.option["unk"]
+    eos_symbol = model.option["eos"]
+
+    svocab, isvocab = svocabs
+    tvocab, itvocab = tvocabs
+
+    if args.align:
+        inputs = [args.source, args.target, args.align]
+    else:
+        inputs = [args.source, args.target]
+
+    reader = textreader(inputs, False)
+    stream = textiterator(reader, [args.batch, args.batch])
+
+    for data in stream:
+        xdata, xmask = convert_data(data[0], svocab, unk_symbol, eos_symbol)
+        ydata, ymask = convert_data(data[1], tvocab, unk_symbol, eos_symbol)
+
+        if not args.align:
+            align = None
+        else:
+            align = convert_align(data[0], data[1], data[2])
+
+        cost = evaluate_model(model, xdata, xmask, ydata, ymask, align,
+                              verbose=args.verbose)
+
+        for i in range(len(cost)):
+            if args.verbose:
+                sys.stdout.write("src: %s\n" % data[0][i])
+                sys.stdout.write("tgt: %s\n" % data[1][i])
+            sys.stdout.write("cost: %f\n" % cost[i])
+
+    stream.close()
+
+
 def helpinfo():
     print "usage:"
     print "\trnnsearch.py <command> [<args>]"
@@ -1082,6 +1147,7 @@ def helpinfo():
     print "use 'rnnsearch.py translate' --help to see decoding options"
     print "use 'rnnsearch.py sample' --help to see sampling options"
     print "use 'rnnsearch.py replace' --help to see UNK replacement options"
+    print "use 'rnnsearch.py evaluate --help' to see evaluation options"
 
 
 if __name__ == "__main__":
@@ -1109,5 +1175,10 @@ if __name__ == "__main__":
             sys.stderr.write("\n")
             args = parseargs_replace(sys.argv[2:])
             replace(args)
+        elif command == "evaluate":
+            sys.stderr.write(" ".join(sys.argv))
+            sys.stderr.write("\n")
+            args = parseargs_evaluate(sys.argv[2:])
+            evaluate(args)
         else:
             helpinfo()

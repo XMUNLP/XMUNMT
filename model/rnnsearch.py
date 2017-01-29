@@ -31,15 +31,14 @@ def gru_encoder(cell, inputs, mask, initial_state=None, dtype=None):
 
     seq = [inputs, mask]
     # ops.scan is a wrapper of theano.scan, which automatically add updates to
-    # optimizer, use theano.scan instead if you do not want this behavior
+    # optimizer, you can set return_updates=True to behave like Theano's scan
     states = ops.scan(loop_fn, seq, [initial_state])
 
     return states
 
 
 def encoder(cell, inputs, mask, initial_state=None, dtype=None, scope=None):
-
-    with ops.variable_scope(scope or "encoder"):
+    with ops.variable_scope(scope or "encoder", dtype=dtype):
         with ops.variable_scope("forward"):
             fd_states = gru_encoder(cell, inputs, mask, initial_state, dtype)
         with ops.variable_scope("backward"):
@@ -51,21 +50,19 @@ def encoder(cell, inputs, mask, initial_state=None, dtype=None, scope=None):
     return fd_states, bd_states
 
 
-# precompute mapped attention states to speed up decoding
-# attention_states: [time_steps, batch, input_size]
-# outputs: [time_steps, batch, attn_size]
-def map_attention_states(attention_states, input_size, attn_size, scope=None):
-    with ops.variable_scope(scope or "attention"):
-        mapped_states = nn.linear(attention_states, [input_size, attn_size],
-                                  False, scope="attention_w")
-
-    return mapped_states
-
-
-def attention(query, mapped_states, state_size, attn_size, attention_mask=None,
+def attention(query, states, mapped_states, attention_mask, size, dtype=None,
               scope=None):
-    with ops.variable_scope(scope or "attention"):
-        mapped_query = nn.linear(query, [state_size, attn_size], False,
+    query_size, states_size, attn_size = size
+
+    with ops.variable_scope(scope or "attention", dtype=dtype):
+        if mapped_states is None:
+            mapped_states = nn.linear(states, [states_size, attn_size],
+                                      False, scope="attention_w")
+
+            if query is None:
+                return mapped_states
+
+        mapped_query = nn.linear(query, [query_size, attn_size], False,
                                  scope="query_w")
 
         mapped_query = mapped_query[None, :, :]
@@ -91,11 +88,11 @@ def decoder(cell, inputs, mask, initial_state, attention_states,
 
     output_size = cell.output_size
     dtype = dtype or inputs.dtype
+    att_size = [output_size, states_size, attn_size]
 
     def loop_fn(inputs, mask, state, attn_states, attn_mask, mapped_states):
         mask = mask[:, None]
-        alpha = attention(state, mapped_states, output_size, attn_size,
-                          attn_mask)
+        alpha = attention(state, None, mapped_states, attn_mask, att_size)
         context = theano.tensor.sum(alpha[:, :, None] * attn_states, 0)
         output, next_state = cell([inputs, context], state)
         next_state = (1.0 - mask) * state +  mask * next_state
@@ -104,13 +101,12 @@ def decoder(cell, inputs, mask, initial_state, attention_states,
 
     with ops.variable_scope(scope or "decoder"):
         if mapped_states is None:
-            mapped_states = map_attention_states(attention_states, states_size,
-                                                 attn_size)
+            mapped_states = attention(None, attention_states, None, None,
+                                      att_size)
         seq = [inputs, mask]
         outputs_info = [initial_state, None]
         non_seq = [attention_states, attention_mask, mapped_states]
-        (states, contexts) = ops.scan(loop_fn, seq, outputs_info,
-                                                  non_seq)
+        (states, contexts) = ops.scan(loop_fn, seq, outputs_info, non_seq)
 
     return states, contexts
 
@@ -146,6 +142,9 @@ class rnnsearch:
         if "criterion" not in option:
             option["criterion"] = "mle"
 
+        if "keep_prob" not in option:
+            option["keep_prob"] = 1.0
+
         dtype = theano.config.floatX
         scope = option["scope"]
         criterion = option["criterion"]
@@ -153,6 +152,7 @@ class rnnsearch:
         regularizer = option["regularizer"]
         keep_prob = option["keep_prob"] or 1.0
 
+        # MRT mode do not use dropout
         if criterion == "mrt":
             keep_prob = 1.0
 
@@ -211,11 +211,10 @@ class rnnsearch:
 
             cell = nn.rnn_cell.gru_cell([sedim, shdim])
 
-            if keep_prob < 1.0:
-                cell = nn.rnn_cell.dropout_wrapper(cell)
-
             outputs = encoder(cell, source_inputs, src_mask)
             annotation = theano.tensor.concatenate(outputs, 2)
+
+            annotation = nn.dropout(annotation, keep_prob=keep_prob)
 
             # compute initial state for decoder
             # first state of backward encoder
@@ -228,16 +227,13 @@ class rnnsearch:
             # run decoder
             cell = nn.rnn_cell.gru_cell([[tedim, 2 * shdim], thdim])
 
-            if keep_prob < 1.0:
-                cell = nn.rnn_cell.dropout_wrapper(cell)
-
             if criterion == "mrt":
                 # In MRT training, shape of src_seq and src_mask are assumed
                 # to have [len, 1]
                 batch = tgt_seq.shape[1]
                 with ops.variable_scope("decoder"):
-                    mapped_states = map_attention_states(annotation, 2 * shdim,
-                                                         ahdim)
+                    mapped_states = attention(None, annotation, None, None,
+                                              [thdim, 2 * shdim, ahdim])
                 b_src_mask = theano.tensor.repeat(src_mask, batch, 1)
                 b_annotation = theano.tensor.repeat(annotation, batch, 1)
                 b_mapped_states = theano.tensor.repeat(mapped_states, batch, 1)
@@ -298,9 +294,11 @@ class rnnsearch:
         with ops.variable_scope(scope, reuse=True):
             prev_words = theano.tensor.ivector("prev_words")
 
-            # encoder, disable dropout
+            # disable dropout
             source_inputs = nn.embedding_lookup(source_embedding, src_seq)
             source_inputs = source_inputs + source_bias
+            target_inputs = nn.embedding_lookup(target_embedding, tgt_seq)
+            target_inputs = target_inputs + target_bias
 
             cell = nn.rnn_cell.gru_cell([sedim, shdim])
             outputs = encoder(cell, source_inputs, src_mask)
@@ -323,10 +321,10 @@ class rnnsearch:
             cell = nn.rnn_cell.gru_cell([[tedim, 2 * shdim], thdim])
 
             with ops.variable_scope("decoder"):
-                mapped_states = map_attention_states(annotation, 2 * shdim,
-                                                     ahdim)
-                alpha = attention(initial_state, mapped_states, thdim, ahdim,
-                                  src_mask)
+                mapped_states = attention(None, annotation, None, None,
+                                          [thdim, 2 * shdim, ahdim])
+                alpha = attention(initial_state, None, mapped_states, src_mask,
+                                  [thdim, 2 * shdim, ahdim])
                 context = theano.tensor.sum(alpha[:, :, None] * annotation, 0)
                 output, next_state = cell([inputs, context], initial_state)
                 probs = prediction(inputs, initial_state, context)
@@ -350,7 +348,8 @@ class rnnsearch:
             max_len = theano.tensor.iscalar()
 
             def sampling_loop(inputs, state, attn_states, attn_mask, m_states):
-                alpha = attention(state, m_states, shdim, ahdim, attn_mask)
+                alpha = attention(state, None, m_states, attn_mask,
+                                  [thdim, 2 * shdim, ahdim])
                 context = theano.tensor.sum(alpha[:, :, None] * attn_states, 0)
                 probs = prediction(inputs, state, context)
                 next_words = ops.random.multinomial(probs).argmax(axis=1)
@@ -381,7 +380,8 @@ class rnnsearch:
             def attention_loop(inputs, mask, state, attn_states, attn_mask,
                                m_states):
                 mask = mask[:, None]
-                alpha = attention(state, m_states, shdim, ahdim, attn_mask)
+                alpha = attention(state, None, m_states, attn_mask,
+                                  [thdim, 2 * shdim, ahdim])
                 context = theano.tensor.sum(alpha[:, :, None] * attn_states, 0)
                 output, next_state = cell([inputs, context], state)
                 next_state = (1.0 - mask) * state + mask * next_state
@@ -578,3 +578,61 @@ def batchsample(model, seq, mask, maxlen=None):
         samples.append(example)
 
     return samples
+
+
+# used for analysis
+def evaluate_model(model, xseq, xmask, yseq, ymask, alignment=None,
+                   verbose=False):
+    t = yseq.shape[0]
+    batch = yseq.shape[1]
+
+    vocab = model.option["vocabulary"][1][1]
+
+    annotation, states, mapped_annot = model.encode(xseq, xmask)
+
+    last_words = numpy.zeros([batch], "int32")
+    costs = numpy.zeros([batch], "float32")
+    indices = numpy.arange(batch, dtype="int32")
+
+    for i in range(t):
+        outputs = model.predict(last_words, states, annotation, mapped_annot,
+                                xmask)
+        # probs: batch * vocab
+        # contexts: batch * hdim
+        # alpha: batch * srclen
+        probs, contexts, alpha = outputs
+
+        if alignment is not None:
+            # alignment tgt * src * batch
+            contexts = numpy.sum(alignment[i][:, :, None] * annotation, 0)
+
+        max_prob = probs.argmax(1)
+        order = numpy.argsort(-probs)
+        label = yseq[i]
+        mask = ymask[i]
+
+        if verbose:
+            for i, (pred, gold, msk) in enumerate(zip(max_prob, label, mask)):
+                if msk and pred != gold:
+                    gold_order = None
+
+                    for j in range(len(order[i])):
+                        if order[i][j] == gold:
+                            gold_order = j
+                            break
+
+                    ent = -numpy.sum(probs[i] * numpy.log(probs[i]))
+                    pp = probs[i, pred]
+                    gp = probs[i, gold]
+                    pred = vocab[pred]
+                    gold = vocab[gold]
+                    print "%d: predication error, %s vs %s" % (i, pred, gold)
+                    print "prob: %f vs %f, entropy: %f" % (pp, gp, ent)
+                    print "gold is %d-th best" % (gold_order + 1)
+
+        costs -= numpy.log(probs[indices, label]) * mask
+
+        last_words = label
+        states = model.generate(last_words, states, contexts)
+
+    return costs

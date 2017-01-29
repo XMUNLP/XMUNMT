@@ -197,6 +197,9 @@ class multi_rnn_cell(rnn_cell):
         if not cells:
             raise ValueError("must specify at least one cell")
 
+        if not isinstance(cells, (list, tuple)):
+            cells = [cells]
+
         self._cells = cells
 
     def __call__(self, inputs, state, c_inputs=None, scope=None):
@@ -206,11 +209,15 @@ class multi_rnn_cell(rnn_cell):
             for i, cell in enumerate(self._cells):
                 with variable_scope("cell_%d" % i):
                     cur_state = state[i]
+
                     if c_inputs:
-                        cur_inp, new_state = cell([cur_inp, c_inputs],
-                                                  cur_state)
-                    else:
-                        cur_inp, new_state = cell(cur_inp, cur_state)
+                        if not isinstance(inputs, (list, tuple)):
+                            cur_inp = [inputs]
+                        if not isinstance(c_inputs, (list, tuple)):
+                            c_inputs = [c_inputs]
+                        cur_inp = list(cur_inp) + list(c_inputs)
+
+                    cur_inp, new_state = cell(cur_inp, cur_state)
                     new_states.append(new_state)
         new_states = tuple(new_states)
         return cur_inp, new_states
