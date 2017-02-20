@@ -320,14 +320,21 @@ class rnnsearch:
 
             cell = nn.rnn_cell.gru_cell([[tedim, 2 * shdim], thdim])
 
+            # encode -> prediction -> generation
+            # prediction: prev_word + prev_state => context, next_word
+            # generation: curr_word + context + prev_state => next_state
+            # here, initial_state is merely a placeholder
             with ops.variable_scope("decoder"):
+                # used in encoding
                 mapped_states = attention(None, annotation, None, None,
                                           [thdim, 2 * shdim, ahdim])
+                # used in prediction
                 alpha = attention(initial_state, None, mapped_states, src_mask,
                                   [thdim, 2 * shdim, ahdim])
                 context = theano.tensor.sum(alpha[:, :, None] * annotation, 0)
-                output, next_state = cell([inputs, context], initial_state)
                 probs = prediction(inputs, initial_state, context)
+                # used in generation
+                output, next_state = cell([inputs, context], initial_state)
 
         # encoding
         encoding_inputs = [src_seq, src_mask]
