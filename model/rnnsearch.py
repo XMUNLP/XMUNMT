@@ -277,7 +277,7 @@ class rnnsearch:
                 logp = -ce
                 score = sharp * logp
                 # safe softmax
-                score = score - theano.tensor.min(score)
+                score = score - theano.tensor.max(score)
                 score = theano.tensor.exp(score)
                 qprob = score / theano.tensor.sum(score)
                 risk = theano.tensor.sum(qprob * loss)
