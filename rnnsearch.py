@@ -357,6 +357,8 @@ def parseargs_decode(args):
     parser.add_argument("--maxlen", type=int, help=msg)
     msg = "min translation length"
     parser.add_argument("--minlen", type=int, help=msg)
+    msg = "oracle texts"
+    parser.add_argument("--oracle", type=str, nargs="+", help=msg)
 
     return parser.parse_args(args)
 
@@ -662,7 +664,7 @@ def train(args):
     # load models
     if os.path.exists(args.model):
         opt, params = load_model(args.model)
-        override(option, opt)
+        option = opt
         init = False
     else:
         init = True
@@ -935,6 +937,11 @@ def decode(args):
     option["normalize"] = args.normalize
     option["arithmetic"] = args.arithmetic
 
+    if args.oracle:
+        references = load_references(args.oracle)
+    else:
+        references = None
+
     while True:
         line = sys.stdin.readline()
 
@@ -951,11 +958,30 @@ def decode(args):
             translation = ""
             score = -10000.0
         else:
-            best, score = tlist[0]
-            translation = " ".join(best[:-1])
+            if references is None:
+                best, score = tlist[0]
+                translation = " ".join(best[:-1])
+                sys.stdout.write(translation)
+                sys.stdout.write("\n")
+            else:
+                best_ind = 0
+                best_score = 0
+                # find the best translation according to oracle
+                for i, (trans, score) in enumerate(tlist):
+                    trans = trans[:-1]
+                    bleu_score = bleu([trans], [references[count]],
+                                      smoothing=True)
+                    if bleu_score > best_score:
+                        best_score = bleu_score
+                        best_ind = i
 
-        sys.stdout.write(translation)
-        sys.stdout.write("\n")
+                output = " ".join(tlist[0][0][:-1]) + " ||| "
+                output += str(tlist[0][1]) + " ||| " + str(best_ind) + " ||| "
+                output += " ".join(tlist[best_ind][0][:-1]) + " ||| "
+                output += str(tlist[best_ind][1])
+
+                sys.stdout.write(output)
+                sys.stdout.write("\n")
 
         count = count + 1
         sys.stderr.write(str(count) + " ")
