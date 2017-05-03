@@ -346,9 +346,9 @@ class rnnsearch:
         prediction_outputs = [probs, context, alpha]
         predict = theano.function(prediction_inputs, prediction_outputs)
 
-        generation_inputs = [prev_words, initial_state, context]
-        generation_outputs = next_state
-        generate = theano.function(generation_inputs, generation_outputs)
+        update_inputs = [prev_words, initial_state, context]
+        update_outputs = next_state
+        update = theano.function(update_inputs, update_outputs)
 
         # sampling graph, this feature is optional
         with ops.variable_scope(scope, reuse=True):
@@ -415,7 +415,7 @@ class rnnsearch:
         self.sample = sample
         self.encode = encode
         self.predict = predict
-        self.generate = generate
+        self.update = update
         self.option = option
 
 
@@ -517,7 +517,7 @@ def beamsearch(models, seq, mask=None, beamsize=10, normalize=False,
         states = select_nbest(states, batch_indices)
         contexts = select_nbest(contexts, batch_indices)
 
-        states = [model.generate(last_words, state, context)
+        states = [model.update(last_words, state, context)
                   for model, state, context in zip(models, states, contexts)]
 
         beam_list.append(next_beam)

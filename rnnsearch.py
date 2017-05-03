@@ -395,6 +395,8 @@ def parseargs_replace(args):
     parser.add_argument("--batch", type=int, default=128, help=msg)
     msg = "use arithmetic mean instead of geometric mean"
     parser.add_argument("--arithmetic", action="store_true", help=msg)
+    msg = "dump align to file"
+    parser.add_argument("--align", type=str, help=msg)
 
     return parser.parse_args(args)
 
@@ -1064,6 +1066,9 @@ def replace(args):
     reader = textreader(args.text, False)
     stream = textiterator(reader, [args.batch, args.batch])
 
+    if args.align:
+        align_file = open(args.align, "w")
+
     for data in stream:
         xdata, xmask = convert_data(data[0], svocab, unk_symbol, eos_symbol)
         ydata, ymask = convert_data(data[1], tvocab, unk_symbol, eos_symbol)
@@ -1088,9 +1093,13 @@ def replace(args):
             target_words = data[1][i].strip().split()
             translation = []
 
+            align_str = []
+
             for j in range(len(target_words)):
                 source_length = len(source_words)
                 word = target_words[j]
+
+                align_str.append("%d-%d" % (indices[j, i], j))
 
                 # found unk symbol
                 if word == unk_symbol:
@@ -1117,8 +1126,14 @@ def replace(args):
                 else:
                     translation.append(word)
 
+            if args.align:
+                align_file.write(" ".join(align_str) + "\n")
+
             sys.stdout.write(" ".join(translation))
             sys.stdout.write("\n")
+
+    if args.align:
+        align_file.close()
 
     stream.close()
 
