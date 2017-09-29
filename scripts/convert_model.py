@@ -40,8 +40,7 @@ def loadmodel(name):
         opt["bosid"] = 0
 
     if not "eosid" in opt:
-        itvocab = opt["vocabulary"][1][1]
-        opt["eosid"] = len(itvocab) - 1
+        opt["eosid"] = 0
 
     name_or_param = cPickle.load(fd)
 
@@ -69,43 +68,44 @@ def get_rnnsearch_keys():
     keys = []
 
     keys.append("rnnsearch/source_embedding/embedding")
-    keys.append("rnnsearch/source_embedding/bias")
     keys.append("rnnsearch/target_embedding/embedding")
-    keys.append("rnnsearch/target_embedding/bias")
-    keys.append("rnnsearch/encoder/forward/gru_cell/reset_gate/matrix_0")
-    keys.append("rnnsearch/encoder/forward/gru_cell/reset_gate/matrix_1")
-    keys.append("rnnsearch/encoder/forward/gru_cell/update_gate/matrix_0")
-    keys.append("rnnsearch/encoder/forward/gru_cell/update_gate/matrix_1")
+    keys.append("rnnsearch/encoder/forward/gru_cell/gates/matrix_0")
+    keys.append("rnnsearch/encoder/forward/gru_cell/gates/matrix_1")
+    keys.append("rnnsearch/encoder/forward/gru_cell/gates/bias")
     keys.append("rnnsearch/encoder/forward/gru_cell/candidate/matrix_0")
     keys.append("rnnsearch/encoder/forward/gru_cell/candidate/matrix_1")
     keys.append("rnnsearch/encoder/forward/gru_cell/candidate/bias")
-    keys.append("rnnsearch/encoder/backward/gru_cell/reset_gate/matrix_0")
-    keys.append("rnnsearch/encoder/backward/gru_cell/reset_gate/matrix_1")
-    keys.append("rnnsearch/encoder/backward/gru_cell/update_gate/matrix_0")
-    keys.append("rnnsearch/encoder/backward/gru_cell/update_gate/matrix_1")
+    keys.append("rnnsearch/encoder/backward/gru_cell/gates/matrix_0")
+    keys.append("rnnsearch/encoder/backward/gru_cell/gates/matrix_1")
+    keys.append("rnnsearch/encoder/backward/gru_cell/gates/bias")
     keys.append("rnnsearch/encoder/backward/gru_cell/candidate/matrix_0")
     keys.append("rnnsearch/encoder/backward/gru_cell/candidate/matrix_1")
     keys.append("rnnsearch/encoder/backward/gru_cell/candidate/bias")
     keys.append("rnnsearch/decoder/initial/matrix_0")
     keys.append("rnnsearch/decoder/initial/bias")
     keys.append("rnnsearch/decoder/attention/attention_w/matrix_0")
+    keys.append("rnnsearch/decoder/attention/attention_w/bias")
+    keys.append("rnnsearch/decoder/below/gru_cell/gates/matrix_0")
+    keys.append("rnnsearch/decoder/below/gru_cell/gates/matrix_1")
+    keys.append("rnnsearch/decoder/below/gru_cell/gates/bias")
+    keys.append("rnnsearch/decoder/below/gru_cell/candidate/matrix_0")
+    keys.append("rnnsearch/decoder/below/gru_cell/candidate/matrix_1")
+    keys.append("rnnsearch/decoder/below/gru_cell/candidate/bias")
     keys.append("rnnsearch/decoder/attention/query_w/matrix_0")
     keys.append("rnnsearch/decoder/attention/attention_v/matrix_0")
-    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_0")
-    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_1")
-    keys.append("rnnsearch/decoder/gru_cell/reset_gate/matrix_2")
-    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_0")
-    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_1")
-    keys.append("rnnsearch/decoder/gru_cell/update_gate/matrix_2")
-    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_0")
-    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_1")
-    keys.append("rnnsearch/decoder/gru_cell/candidate/matrix_2")
-    keys.append("rnnsearch/decoder/gru_cell/candidate/bias")
-    keys.append("rnnsearch/decoder/maxout/matrix_0")
-    keys.append("rnnsearch/decoder/maxout/matrix_1")
-    keys.append("rnnsearch/decoder/maxout/matrix_2")
-    keys.append("rnnsearch/decoder/maxout/bias")
+    keys.append("rnnsearch/decoder/attention/attention_v/bias")
+    keys.append("rnnsearch/decoder/above/gru_cell/gates/matrix_0")
+    keys.append("rnnsearch/decoder/above/gru_cell/gates/matrix_1")
+    keys.append("rnnsearch/decoder/above/gru_cell/gates/bias")
+    keys.append("rnnsearch/decoder/above/gru_cell/candidate/matrix_0")
+    keys.append("rnnsearch/decoder/above/gru_cell/candidate/matrix_1")
+    keys.append("rnnsearch/decoder/above/gru_cell/candidate/bias")
     keys.append("rnnsearch/decoder/deepout/matrix_0")
+    keys.append("rnnsearch/decoder/deepout/matrix_1")
+    keys.append("rnnsearch/decoder/deepout/matrix_2")
+    keys.append("rnnsearch/decoder/deepout/bias_0")
+    keys.append("rnnsearch/decoder/deepout/bias_1")
+    keys.append("rnnsearch/decoder/deepout/bias_2")
     keys.append("rnnsearch/decoder/logits/matrix_0")
     keys.append("rnnsearch/decoder/logits/bias")
 
@@ -113,7 +113,20 @@ def get_rnnsearch_keys():
 
 
 if __name__ == "__main__":
+    mapping = {18:24, 19:25, 20:26, 21:18, 22:19, 23:20, 24:21, 25:22, 26:23}
+
     opt, params = loadmodel(sys.argv[1])
+
+    newparams = {}
+
+    for i in range(len(params)):
+        if i not in mapping:
+            newparams[i] = params[i]
+        else:
+            newparams[mapping[i]] = params[i]
+
+    params = [newparams[i] for i in range(len(params))]
+
     names = get_rnnsearch_keys()
     params = dict([(name, val) for name, val in zip(names, params)])
 

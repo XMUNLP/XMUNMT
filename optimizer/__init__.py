@@ -1,5 +1,5 @@
-# optimizer/__init__.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
+# __init__.py
 
 from optimizer import optimizer
+
+__all__ = ["optimizer"]

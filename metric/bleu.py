@@ -64,21 +64,27 @@ def modified_precision(candidate, references, n):
     return float(sum(clipped_counts.values())), float(sum(counts.values()))
 
 
-def brevity_penalty(trans, refs, mode="closest"):
+def brevity_penalty(trans, refs, mode="closest", strict=False):
     bp_c = 0.0
     bp_r = 0.0
 
     for candidate, references in zip(trans, refs):
-        bp_c += len(candidate)
+        l_c = len(candidate)
 
         if mode == "shortest":
-            bp_r += shortest_length(references)
+            l_r = shortest_length(references)
         else:
-            bp_r += closest_length(candidate, references)
+            l_r = closest_length(candidate, references)
+
+        if strict:
+            bp_c += min(l_c, l_r)
+        else:
+            bp_c += l_c
+        bp_r += l_r
 
     bp = 1.0
 
-    if bp_c <= bp_r:
+    if strict or bp_c <= bp_r:
         bp = math.exp(1.0 - bp_r / bp_c)
 
     return bp
@@ -104,7 +110,8 @@ def smooth_count(count1, count2, mode):
 
 # trans: a list of tokenized sentence
 # refs: a list of list of tokenized reference sentences
-def bleu(trans, refs, bp="closest", smoothing=False, n=4, weight=None):
+def bleu(trans, refs, bp="closest", smoothing=False, n=4, weight=None,
+         strict=False):
     p_norm = [0 for i in range(n)]
     p_denorm = [0 for i in range(n)]
 
@@ -124,7 +131,7 @@ def bleu(trans, refs, bp="closest", smoothing=False, n=4, weight=None):
         else:
             bleu_n[i] = math.log(float(p_norm[i]) / float(p_denorm[i]))
 
-    bp = brevity_penalty(trans, refs, bp)
+    bp = brevity_penalty(trans, refs, bp, strict)
 
     bleu = bp * math.exp(sum(bleu_n) / float(n))
 
