@@ -91,7 +91,7 @@ def create_zeros_slot(primary, name, dtype=None):
     if dtype is None:
         dtype = primary.dtype
     shape = primary.get_shape().as_list()
-    init_val = tf.zeros_initializer(shape, dtype=dtype)
+    init_val = tf.zeros_initializer()(shape, dtype=dtype)
     var = tf.Variable(init_val, name=name, trainable=False)
     return var
 

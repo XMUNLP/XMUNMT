@@ -1,8 +1,5 @@
-# model/__init__.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
+# __init__.py
 
-from nmt import NMT, beamsearch
+from nmt import nmt, beamsearch
 
-
-__all__ = ["NMT", "beamsearch"]
+__all__ = ["nmt", "beamsearch"]

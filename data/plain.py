@@ -2,49 +2,42 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-import numpy
+import numpy as np
 
 
 __all__ = ["data_length", "convert_data"]
 
 
 def data_length(line):
-    return len(line.strip().split())
+    return len(line.split())
 
 
-def tokenize(data):
-    return data.split()
+def convert_data(data, voc, unk="UNK", eos="<eos>", time_major=True):
+    # tokenize
+    data = [line.split() + [eos] for line in data]
 
-
-def to_word_id(data, voc, unk="UNK"):
-    newdata = []
     unkid = voc[unk]
+
+    newdata = []
 
     for d in data:
         idlist = [voc[w] if w in voc else unkid for w in d]
         newdata.append(idlist)
 
-    return newdata
+    data = newdata
 
+    lens = [len(tokens) for tokens in data]
 
-def convert_to_array(data, dtype):
-    batch = len(data)
-    data_len = map(len, data)
-    max_len = max(data_len)
+    n = len(lens)
+    maxlen = np.max(lens)
 
-    seq = numpy.zeros((max_len, batch), "int32")
-    mask = numpy.zeros((max_len, batch), dtype)
+    batch_data = np.zeros((n, maxlen), "int32")
+    data_length = np.array(lens)
 
     for idx, item in enumerate(data):
-        seq[:data_len[idx], idx] = item
-        mask[:data_len[idx], idx] = 1.0
+        batch_data[idx, :lens[idx]] = item
 
-    return seq, mask
+    if time_major:
+        batch_data = batch_data.transpose()
 
-
-def convert_data(data, voc, unk="UNK", eos="<eos>", dtype="float32"):
-    data = [tokenize(item) + [eos] for item in data]
-    data = to_word_id(data, voc, unk)
-    seq, mask = convert_to_array(data, dtype)
-
-    return seq, mask
+    return batch_data, data_length

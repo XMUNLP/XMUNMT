@@ -7,8 +7,19 @@ import collections
 
 
 def load_vocab(filename):
+    suffix = filename.strip().split(".")[-1]
     fd = open(filename, "r")
-    vocab = cPickle.load(fd)
+
+    if suffix == "pkl":
+        vocab = cPickle.load(fd)
+    else:
+        vocab = {}
+        count = 0
+
+        for line in fd:
+            vocab[line.strip()] = count
+            count += 1
+
     fd.close()
     return vocab
 
