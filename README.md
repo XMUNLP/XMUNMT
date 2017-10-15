@@ -2,6 +2,10 @@
 An implementation of RNNsearch using TensorFlow, the implementation is based on
 with [DL4MT](https://github.com/nyu-dl/dl4mt-tutorial).
 
+## Note
+This repository is currently under major revision. We will release a new 
+version soon. Stay tuned!
+
 
 ## Tutorial
 This tutorial describes how to train a model on WMT17's EN-DE data using this
@@ -16,16 +20,16 @@ The preprocessed data can be found at
   * The most common approach to achieve open vocabulary is to use a technique
   called BPE. The codes of BPE can be found at 
   [here](https://github.com/rsennrich/subword-nmt).
-  * To encoding training corpora using BPE, you need to generate BPE operations
-  first. The following command will create a file named "bpe32k" which
-  containing 32k BPE operations, along with two dictionaries named 
-  "vocab.en" and "vocab.de"
+  * To encode the training corpora using BPE, you need to generate BPE 
+  operations first. The following command will create a file named "bpe32k" 
+  which contains 32k BPE operations, along with two dictionaries named 
+  "vocab.en" and "vocab.de".
   ```
   python subword-nmt/learn_joint_bpe_and_vocab.py 
     --input corpus.tc.en corpus.tc.de -s 32000 -o bpe32k 
     --write-vocabulary vocab.en vocab.de
   ```
-  * You need to encoding the training corpora, validation data and test data
+  * You need to encode the training corpora, validation data and test data
   using the generated BPE operations and dictionaries. 
   ```
   python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en 

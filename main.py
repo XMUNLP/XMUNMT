@@ -14,7 +14,7 @@ import numpy as np
 import tensorflow as tf
 
 from metric import bleu
-from model import nmt, beamsearch
+from model import NMT, beamsearch
 from optimizer import optimizer
 from data import textreader, textiterator
 from data.plain import convert_data, data_length
@@ -61,7 +61,7 @@ def load_model(name):
 
     fd.close()
 
-    # small fix for compatbility
+    # small fix for compatibility
     if "embedding" not in option:
         option["embedding"] = option["embdim"][0]
         option["attention"] = option["hidden"][2]
@@ -79,6 +79,9 @@ def match_variables(variables, values, ignore_prefix=True):
     for var in variables:
         if ignore_prefix:
             name = "/".join(var.name.split("/")[1:])
+        else:
+            name = var.name
+
         var_dict[name] = var
 
     for (name, val) in values:
@@ -114,7 +117,8 @@ def set_variables(variables, values):
     session = tf.get_default_session()
 
     for p, v in zip(variables, values):
-        session.run(p.assign(v))
+        with tf.device("/cpu:0"):
+            session.run(p.assign(v))
 
 
 def count_parameters(variables):
@@ -194,7 +198,7 @@ def validate_model(model, valset, refset, search_option,
 
     best_score = option["bleu"]
     if bleu_score > best_score:
-        option["bleu"] = best_score
+        option["bleu"] = bleu_score
         save_model(model, name, reader, option, **variables)
 
 
@@ -310,61 +314,50 @@ def parseargs_decode(args):
 
 # default options
 def default_option():
-    option = {}
-
-    # training corpus and vocabulary
-    option["corpus"] = None
-    option["vocab"] = None
-
-    # model parameters
-    option["embedding"] = 512
-    option["hidden"] = 1024
-    option["attention"] = 2048
-
-    # tuning options
-    option["alpha"] = 5e-4
-    option["batch"] = 128
-    option["optimizer"] = "adam"
-    option["norm"] = 5.0
-    option["stop"] = 0
-    option["decay"] = 0.5
-    option["scale"] = 0.08
-    option["l1_scale"] = None
-    option["l2_scale"] = None
-    option["keep_prob"] = None
-
-    # runtime information
-    option["cost"] = 0.0
-    option["count"] = [0, 0]
-    option["epoch"] = 1
-    option["maxepoch"] = 5
-    option["sort"] = 20
-    option["shuffle"] = False
-    option["limit"] = [50, 50]
-    option["freq"] = 1000
-    option["vfreq"] = 1000
-    option["sfreq"] = 50
-    option["seed"] = 1234
-    option["validation"] = None
-    option["references"] = None
-    option["bleu"] = 0.0
-    option["indices"] = None
-
-    # beam search
-    option["beamsize"] = 10
-    option["normalize"] = False
-    option["maxlen"] = None
-    option["minlen"] = None
-
-    # special symbols
-    option["unk"] = "UNK"
-    option["eos"] = "</s>"
+    option = {
+        "corpus": None,
+        "vocab": None,
+        "embedding": 512,
+        "hidden": 1024,
+        "attention": 2048,
+        "alpha": 5e-4,
+        "batch": 128,
+        "optimizer": adam,
+        "norm": 5.0,
+        "stop": 0,
+        "decay": 0.5,
+        "scale": 0.08,
+        "l1_scale": None,
+        "l2_scale": None,
+        "keep_prob": None,
+        "cost": 0.0,
+        "count": [0, 0],
+        "epoch": 1,
+        "maxepoch": 5,
+        "sort": 20,
+        "shuffle": False,
+        "limit": [50, 50],
+        "freq": 1000,
+        "vfreq": 1000,
+        "sfreq": 50,
+        "seed": 1234,
+        "validation": None,
+        "references": None,
+        "bleu": 0.0,
+        "indices": None,
+        "beamsize": 10,
+        "normalize": False,
+        "maxlen": None,
+        "minlen": None,
+        "unk": "UNK",
+        "eos": "</s>"
+    }
 
     return option
 
 
-def args_to_dict(args):
-    return args.__dict__
+def args_to_dict(arguments):
+    return arguments.__dict__
 
 
 def override_if_not_none(opt1, opt2, key):
@@ -384,17 +377,17 @@ def override_if_not_none(opt1, opt2, key):
 def override(option, newopt):
 
     # training corpus
-    if newopt["corpus"] == None and option["corpus"] == None:
+    if newopt["corpus"] is None and option["corpus"] is None:
         raise RuntimeError("error: no training corpus specified")
 
     # vocabulary
-    if newopt["vocab"] == None and option["vocab"] == None:
+    if newopt["vocab"] is None and option["vocab"] is None:
         raise RuntimeError("error: no training vocabulary specified")
 
     override_if_not_none(option, newopt, "corpus")
 
     # vocabulary and model paramters cannot be overrided
-    if option["vocab"] == None:
+    if option["vocab"] is None:
         option["vocab"] = newopt["vocab"]
 
         svocab = load_vocab(option["vocab"][0])
@@ -442,7 +435,6 @@ def override(option, newopt):
     override_if_not_none(option, newopt, "global_step")
     override_if_not_none(option, newopt, "local_cost")
     override_if_not_none(option, newopt, "local_step")
-
 
     # beamsearch
     override_if_not_none(option, newopt, "beamsize")
@@ -524,6 +516,7 @@ def train(args):
         init = False
     else:
         init = True
+        params = None
 
     override(option, args_to_dict(args))
     print_option(option)
@@ -554,11 +547,12 @@ def train(args):
     skip_stream(reader, option["count"][1])
 
     # beamsearch option
-    search_opt = {}
-    search_opt["beamsize"] = option["beamsize"]
-    search_opt["normalize"] = option["normalize"]
-    search_opt["maxlen"] = option["maxlen"]
-    search_opt["minlen"] = option["minlen"]
+    search_opt = {
+        "beamsize": option["beamsize"],
+        "normalize": option["normalize"],
+        "maxlen": option["maxlen"],
+        "minlen": option["minlen"]
+    }
 
     # misc
     svocabs, tvocabs = option["vocabulary"]
@@ -569,6 +563,20 @@ def train(args):
 
     scale = option["scale"]
 
+    # set seed
+    np.random.seed(option["seed"])
+    tf.set_random_seed(option["seed"])
+
+    initializer = tf.random_uniform_initializer(-scale, scale)
+    model = NMT(option["embedding"], option["hidden"], option["attention"],
+                len(isvocab), len(itvocab), initializer=initializer)
+
+    model.option = option
+
+    # create optimizer
+    optim = Optimizer(model, algorithm=option["optimizer"], norm=True,
+                        constraint=("norm", option["norm"]))
+
     # create session
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -577,20 +585,6 @@ def train(args):
         config.gpu_options.visible_device_list = "%d" % args.gpuid
 
     with tf.Session(config=config):
-        # set seed
-        np.random.seed(option["seed"])
-        tf.set_random_seed(option["seed"])
-
-        initializer = tf.random_uniform_initializer(-scale, scale)
-        model = nmt(option["embedding"], option["hidden"], option["attention"],
-                    len(isvocab), len(itvocab), initializer=initializer)
-
-        model.option = option
-
-        # create optimizer
-        optim = optimizer(model, algorithm=option["optimizer"], norm=True,
-                          constraint=("norm", option["norm"]))
-
         tf.global_variables_initializer().run()
 
         print "parameters:", count_parameters(tf.trainable_variables())
@@ -709,18 +703,20 @@ def decode(args):
 
     count = 0
 
-    doption = {}
-    doption["maxlen"] = args.maxlen
-    doption["minlen"] = args.minlen
-    doption["beamsize"] = args.beamsize
-    doption["normalize"] = args.normalize
+    doption = {
+        "maxlen": args.maxlen,
+        "minlen": args.minlen,
+        "beamsize": args.beamsize,
+        "normalize": args.normalize
+    }
+
+    # create graph
+    model = NMT(option["embedding"], option["hidden"], option["attention"],
+                len(isvocab), len(itvocab))
+
+    model.option = option
 
     with tf.Session(config=config):
-        model = nmt(option["embedding"], option["hidden"], option["attention"],
-                    len(isvocab), len(itvocab))
-
-        model.option = option
-
         tf.global_variables_initializer().run()
         set_variables(tf.trainable_variables(), values)
 

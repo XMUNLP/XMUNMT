@@ -1,5 +1,5 @@
 # __init__.py
 
-from optimizer import optimizer
+from optimizer import Optimizer
 
-__all__ = ["optimizer"]
+__all__ = ["Optimizer"]

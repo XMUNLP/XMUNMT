@@ -17,17 +17,18 @@ def rnn_encoder(cell, inputs, sequence_length, parallel_iterations=None,
     batch = tf.shape(inputs)[1]
     dtype = dtype or inputs.dtype
 
-    state = cell.zero_state(batch, dtype)
+    initial_state = cell.zero_state(batch, dtype)
 
-    (outputs, final_state) = ops.rnn.rnn_loop(cell, inputs, state,
-                                              parallel_iterations,
-                                              swap_memory, sequence_length,
-                                              dtype)
+    outputs, state = tf.nn.dynamic_rnn(cell, inputs, sequence_length,
+                                       initial_state=initial_state,
+                                       swap_memory=swap_memory,
+                                       time_major=True, dtype=dtype,
+                                       parallel_iterations=parallel_iterations)
 
-    return (outputs, final_state)
+    return outputs, state
 
 
-def encoder(cell_below, cell_above, inputs, sequence_length,
+def encoder(cell_fw, cell_bw, inputs, sequence_length,
             parallel_iterations=None, swap_memory=False, dtype=None,
             scope=None):
     time_dim = 0
@@ -35,7 +36,7 @@ def encoder(cell_below, cell_above, inputs, sequence_length,
 
     with tf.variable_scope(scope or "encoder"):
         with tf.variable_scope("forward"):
-            output_fw, state_fw = rnn_encoder(cell_below, inputs,
+            output_fw, state_fw = rnn_encoder(cell_fw, inputs,
                                               sequence_length,
                                               parallel_iterations, swap_memory,
                                               dtype)
@@ -45,7 +46,7 @@ def encoder(cell_below, cell_above, inputs, sequence_length,
                                              batch_dim)
 
         with tf.variable_scope("backward"):
-            output_bw, state_bw = rnn_encoder(cell_below, inputs_reverse,
+            output_bw, state_bw = rnn_encoder(cell_bw, inputs_reverse,
                                               sequence_length,
                                               parallel_iterations, swap_memory,
                                               dtype)
@@ -131,7 +132,7 @@ def decoder(cell, inputs, initial_state, attention_states,  attention_length,
                 output, new_state = cell(context, state)
             output_ta = output_ta.write(time, output)
             context_ta = context_ta.write(time, context)
-            return (time + 1, output_ta, context_ta, new_state)
+            return time + 1, output_ta, context_ta, new_state
 
         time = tf.constant(0, dtype=tf.int32, name="time")
         cond = lambda time, *_: time < time_steps
@@ -150,7 +151,7 @@ def decoder(cell, inputs, initial_state, attention_states,  attention_length,
     return final_output, final_context
 
 
-class nmt:
+class NMT:
 
     def __init__(self, emb_size, hidden_size, attn_size, svocab_size,
                  tvocab_size, **option):
@@ -234,12 +235,12 @@ class nmt:
                                     keep_prob=keep_prob)
 
             labels = tf.reshape(tgt_seq, [-1])
-            crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                                      labels=labels)
-            crossent = tf.reshape(crossent, tf.shape(tgt_seq))
+            ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
+                                                                labels=labels)
+            ce = tf.reshape(ce, tf.shape(tgt_seq))
             mask = tf.sequence_mask(tgt_len, dtype=tf.float32)
             mask = tf.transpose(mask)
-            cost = tf.reduce_mean(tf.reduce_sum(crossent * mask, 0))
+            cost = tf.reduce_mean(tf.reduce_sum(ce * mask, 0))
 
         train_inputs = [src_seq, src_len, tgt_seq, tgt_len]
         train_outputs = [cost]
@@ -273,7 +274,6 @@ class nmt:
                 initial_state = ops.nn.linear(ctx_sum, hidden_size, True,
                                               scope="initial")
                 initial_state = tf.tanh(initial_state)
-
 
             with tf.variable_scope("decoder"):
                 mask = tf.sequence_mask(src_len, tf.shape(src_seq)[0],
@@ -331,10 +331,10 @@ def beamsearch(model, seq, seqlen=None, beamsize=10, normalize=False,
     else:
         seq_len = seqlen
 
-    if maxlen == None:
+    if maxlen is None:
         maxlen = seq_len[0] * 3
 
-    if minlen == None:
+    if minlen is None:
         minlen = seq_len[0] / 2
 
     annotation, mapped_states, initial_state, attn_mask = encode(seq, seq_len)
@@ -346,7 +346,6 @@ def beamsearch(model, seq, seqlen=None, beamsize=10, normalize=False,
 
     hypo_list = []
     beam_list = [initial_beam]
-    cond = lambda x: x[-1] == eosid
 
     for k in range(maxlen):
         if size == 0:
@@ -377,7 +376,8 @@ def beamsearch(model, seq, seqlen=None, beamsize=10, normalize=False,
             logprobs[:, eosid] = eosprob
 
         next_beam = beam(size)
-        outputs = next_beam.prune(logprobs, cond, prev_beam)
+        outputs = next_beam.prune(logprobs, lambda x: x[-1] == eosid,
+                                  prev_beam)
 
         hypo_list.extend(outputs[0])
         batch_indices, word_indices = outputs[1:]

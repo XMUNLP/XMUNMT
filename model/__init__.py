@@ -1,5 +1,5 @@
 # __init__.py
 
-from nmt import nmt, beamsearch
+from nmt import NMT, beamsearch
 
-__all__ = ["nmt", "beamsearch"]
+__all__ = ["NMT", "beamsearch"]

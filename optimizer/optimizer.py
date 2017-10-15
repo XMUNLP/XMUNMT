@@ -96,7 +96,7 @@ def create_zeros_slot(primary, name, dtype=None):
     return var
 
 
-class optimizer:
+class Optimizer:
 
     def __init__(self, model, **option):
         loss = model.cost
