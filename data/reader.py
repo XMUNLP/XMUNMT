@@ -6,7 +6,7 @@ import numpy
 
 
 # lowest-level stream
-class textreader:
+class TextReader:
 
     def __init__(self, name, shuffle=False, readall=False):
         if not isinstance(name, (list, tuple)):

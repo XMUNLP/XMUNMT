@@ -15,8 +15,8 @@ import tensorflow as tf
 
 from metric import bleu
 from model import NMT, beamsearch
-from optimizer import optimizer
-from data import textreader, textiterator
+from optimizer import Optimizer
+from data import TextReader, TextIterator
 from data.plain import convert_data, data_length
 from data.vocab import load_vocab, invert_vocab
 
@@ -134,8 +134,8 @@ def count_parameters(variables):
 
 def load_references(names, case=True):
     references = []
-    reader = textreader(names)
-    stream = textiterator(reader, size=[1, 1])
+    reader = TextReader(names)
+    stream = TextIterator(reader, size=[1, 1])
 
     for data in stream:
         newdata= []
@@ -322,7 +322,7 @@ def default_option():
         "attention": 2048,
         "alpha": 5e-4,
         "batch": 128,
-        "optimizer": adam,
+        "optimizer": "adam",
         "norm": 5.0,
         "stop": 0,
         "decay": 0.5,
@@ -531,9 +531,9 @@ def train(args):
     batch = option["batch"]
     sortk = option["sort"] or 1
     shuffle = option["seed"] if option["shuffle"] else None
-    reader = textreader(option["corpus"], shuffle)
+    reader = TextReader(option["corpus"], shuffle)
     processor = [data_length, data_length]
-    stream = textiterator(reader, [batch, batch * sortk], processor,
+    stream = TextIterator(reader, [batch, batch * sortk], processor,
                           option["limit"], option["sort"])
 
     if shuffle and option["indices"] is not None:

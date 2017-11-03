@@ -2,5 +2,5 @@
 # author: Playinf
 # email: playinf@stu.xmu.edu.cn
 
-from reader import textreader
-from iterator import textiterator
+from reader import TextReader
+from iterator import TextIterator

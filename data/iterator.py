@@ -5,7 +5,7 @@
 import numpy
 
 
-class textiterator:
+class TextIterator:
 
     def __init__(self, reader, size, processor=None, maxlen=None, sort=False):
         if not isinstance(size, (list, tuple)) or len(size) != 2:
