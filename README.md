@@ -1,15 +1,16 @@
-# RNNsearch
-An implementation of RNNsearch using TensorFlow, the implementation is based on
-with [DL4MT](https://github.com/nyu-dl/dl4mt-tutorial).
+# XMUNMT
+An open source Neural Machine Translation toolkit developed by NLPLAB of Xiamen University.
 
-## Note
-This repository is currently under major revision. We will release a new 
-version soon. Stay tuned!
+## Features
+* Multi-GPU support
+* Builtin validation functionality
 
 
 ## Tutorial
-This tutorial describes how to train a model on WMT17's EN-DE data using this
-repository.
+This tutorial describes how to train an NMT model on WMT17's EN-DE data using this repository.
+
+### Prerequisite
+You must install TensorFlow (>=1.4.0) first to use this library. 
 
 ### Download Data
 The preprocessed data can be found at 
@@ -17,74 +18,70 @@ The preprocessed data can be found at
 
 ### Data Preprocessing
 1. Byte Pair Encoding
-  * The most common approach to achieve open vocabulary is to use a technique
-  called BPE. The codes of BPE can be found at 
-  [here](https://github.com/rsennrich/subword-nmt).
-  * To encode the training corpora using BPE, you need to generate BPE 
-  operations first. The following command will create a file named "bpe32k" 
-  which contains 32k BPE operations, along with two dictionaries named 
-  "vocab.en" and "vocab.de".
+  * The most common approach to achieve open vocabulary is to use Byte Pair Encoding (BPE). The codes of BPE can be found at [here](https://github.com/rsennrich/subword-nmt).
+  * To encode the training corpora using BPE, you need to generate BPE operations first. The following command will create a file named "bpe32k", which contains 32k BPE operations along with two dictionaries named "vocab.en" and "vocab.de".
   ```
-  python subword-nmt/learn_joint_bpe_and_vocab.py 
-    --input corpus.tc.en corpus.tc.de -s 32000 -o bpe32k 
-    --write-vocabulary vocab.en vocab.de
+  python subword-nmt/learn_joint_bpe_and_vocab.py --input corpus.tc.en corpus.tc.de -s 32000 -o bpe32k --write-vocabulary vocab.en vocab.de
   ```
-  * You need to encode the training corpora, validation data and test data
-  using the generated BPE operations and dictionaries. 
+  * You still need to encode the training corpora, validation set and test set using the generated BPE operations and dictionaries. 
   ```
-  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en 
-    --vocabulary-threshold 50 < corpus.tc.en > corpus.bpe32k.en
-  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.de 
-    --vocabulary-threshold 50 < corpus.tc.de > corpus.bpe32k.de
-  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en 
-    --vocabulary-threshold 50 < newstest2016.tc.en > newstest2016.bpe32k.en
-  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.de 
-    --vocabulary-threshold 50 < newstest2016.tc.de > newstest2016.bpe32k.de
-  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en 
-    --vocabulary-threshold 50 < newstest2017.tc.en > newstest2017.bpe32k.en
+  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en --vocabulary-threshold 50 < corpus.tc.en > corpus.bpe32k.en
+  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.de --vocabulary-threshold 50 < corpus.tc.de > corpus.bpe32k.de
+  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en --vocabulary-threshold 50 < newstest2016.tc.en > newstest2016.bpe32k.en
+  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.de --vocabulary-threshold 50 < newstest2016.tc.de > newstest2016.bpe32k.de
+  python subword-nmt/apply_bpe.py -c bpe32k --vocabulary vocab.en --vocabulary-threshold 50 < newstest2017.tc.en > newstest2017.bpe32k.en
+  ```
+  
+2. Environment Variables
+  * Before using XMUNMT, you need to add the path of XMUNMT to PYTHONPATH environment variable. Typically, this can be done by adding the following line to the .bashrc file in your home directory.
+  ```
+  PYTHONPATH=/PATH/TO/XMUNMT:$PYTHONPATH
   ```
   
 2. Build vocabulary
-  * To train an NMT, you need to build a vocabulary file first. To build a 
-  shared source and target vocabulary, following the steps below.
+  * To train an NMT, you need to build vocabularies first. To build a shared source and target vocabulary, you can use the following script:
   ```
   cat corpus.bpe32k.en corpus.bpe32k.de > corpus.bpe32k.all
-  python scripts/build_vocab.py --special "</s>:UNK" corpus.bpe32k.all 
-    vocab.shared32k.txt
+  python XMUNMT/xmunmt/scripts/build_vocab.py corpus.bpe32k.all vocab.shared32k.txt
   ```
-  * Note that the symbol "\</s\>" and "UNK" are reserved control symbols.
 3. Shuffle corpus
-  * It is beneficial to shuffle training corpora before training.
+  * It is beneficial to shuffle the training corpora before training.
   ```
-  python scripts/shuffle.py --corpus corpus.bpe32k.en corpus.bpe32k.de 
-    --seed 1234
+  python XMUNMT/xmunmt/scripts/shuffle_corpus.py --corpus corpus.bpe32k.en corpus.bpe32k.de --seed 1234
   ```
-  * The above command will create two new files named "corpus.bpe32k.en.shuf"
-  and "corpus.bpe32k.de.shuf".
+  * The above command will create two new files named "corpus.bpe32k.en.shuf" and "corpus.bpe32k.de.shuf".
 
 ### Training
-  * Finally, we can start the training stage. The recommended hyper-parameters 
-  are described below.
+  * Finally, we can start the training stage. The recommended hyper-parameters are described below.
   ```
-  python main.py train --model nmt  
-    --corpus corpus.bpe32k.en.shuf corpus.bpe32k.de.shuf 
-    --vocab vocab.bpe32k.shared.txt vocab.bpe32k.shared.txt 
-    --embedding 512 --hidden 1024 --attention 2048
-    --alpha 5e-4 --norm 5.0 --batch 128 --maxepoch 3 --seed 1234 
-    --freq 1000 --vfreq 5000 --sfreq 50 --sort 20 --keep-prob 0.8
-    --validation newstest2016.bpe32k.en --references newstest2016.bpe32k.de
-    --gpuid 0
+  python XMUNMT/xmunmt/bin/trainer.py
+    --model rnnsearch
+    --output train 
+    --input corpus.bpe32k.en.shuf corpus.bpe32k.de.shuf
+    --vocabulary vocab.shared32k.txt vocab.shared32k.txt
+    --validation newstest2016.bpe32k.en
+    --references newstest2016.bpe32k.de
+    --parameters=device_list=[0],eval_steps=5000,train_steps=75000,
+                 learning_rate_decay=piecewise_constant,
+                 learning_rate_values=[5e-4,25e-5,125e-6],
+                 learning_rate_boundaries=[25000,50000]
   ```
-  * Change the argument of "--gpuid" to select GPU. The above command will 
-  create a file named "nmt.autosave.pkl" every 1000 steps. The validation data
-  will be evaluated every 5000 steps and the best model will saved to 
-  "nmt.best.pkl" automatically.
+  * Change the argument of "device_list" to select GPU or use multiple GPUs. The above command will create a directory named "train".
+    The best model can be found at "train/eval"
 
 ### Decoding
   * The decoding command is quite simple.
   ```
-    python main.py translate --model nmt.best.pkl < input > translation
+  python XMUNMT/xmunmt/bin/translator.py
+    --models rnnsearch
+    --checkpoints train/
+    --input newstest2017.bpe32k.en
+    --output test.txt
+    --vocabulary vocab.shared32k.txt vocab.shared32k.txt
   ```
 
-## Benchmark
-  * This section will be updated soon.
+## Contact
+This code is written by Zhixing Tan. If you have any problems, feel free to send an <a href="mailto:zb@stu.xmu.edu.cn">email</a>.
+
+## LICENSE
+ BSD
