@@ -89,7 +89,7 @@ The preprocessed data can be found at
 
 
 ## Contact
-This code is written by Zhixing Tan. If you have any problems, feel free to send an <a href="mailto:zb@stu.xmu.edu.cn">email</a>.
+This code is written by Zhixing Tan. If you have any problems, feel free to send an <a href="mailto:playinf@stu.xmu.edu.cn">email</a>.
 
 ## LICENSE
  BSD
