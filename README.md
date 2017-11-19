@@ -79,6 +79,14 @@ The preprocessed data can be found at
     --output test.txt
     --vocabulary vocab.shared32k.txt vocab.shared32k.txt
   ```
+  
+## Benchmark
+|    Dataset    |    BLEU    |
+| :------------ | :--------: |
+|  WMT17 De-En  |    30.42   |
+
+* More benchmarks will be added soon.
+
 
 ## Contact
 This code is written by Zhixing Tan. If you have any problems, feel free to send an <a href="mailto:zb@stu.xmu.edu.cn">email</a>.
