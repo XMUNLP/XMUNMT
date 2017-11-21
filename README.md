@@ -1,5 +1,5 @@
 # XMUNMT
-An open source Neural Machine Translation toolkit developed by NLPLAB of Xiamen University.
+An open source Neural Machine Translation toolkit developed by the NLPLAB of Xiamen University.
 
 ## Features
 * Multi-GPU support

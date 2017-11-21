@@ -73,7 +73,6 @@ def attention(query, memories, bias, hidden_size, cache=None, reuse=None,
         hidden = tf.tanh(q[:, None, :] + k)
         hidden = tf.reshape(hidden, [-1, hidden_size])
 
-        # Shape: [batch, mem_size, 1]
         logits = linear(hidden, 1, False, False, scope="logits")
         logits = tf.reshape(logits, [-1, mem_shape[1]])
 
