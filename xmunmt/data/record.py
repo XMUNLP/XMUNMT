@@ -130,15 +130,10 @@ def get_input_features(file_patterns, mode, params):
                 drop_long_sequences
             )
 
-    targets = feature_map["targets"]
-    bos_id = params.mapping["target"][params.bos]
-    targets = tf.pad(targets, [[0, 0], [1, 0]],
-                     constant_values=bos_id)[:, :-1]
-
     # Final feature map.
     features = {
         "source": feature_map["inputs"],
-        "target": targets,
+        "target": feature_map["targets"],
         "source_length": tf.to_int32(
             tf.reduce_sum(
                 tf.to_float(tf.not_equal(feature_map["inputs"], 0)),

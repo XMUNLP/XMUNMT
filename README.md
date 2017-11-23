@@ -74,16 +74,19 @@ The preprocessed data can be found at
   ```
   python XMUNMT/xmunmt/bin/translator.py
     --models rnnsearch
-    --checkpoints train/
+    --checkpoints train/eval
     --input newstest2017.bpe32k.en
     --output test.txt
     --vocabulary vocab.shared32k.txt vocab.shared32k.txt
   ```
   
 ## Benchmark
-|    Dataset    |    BLEU    |
-| :------------ | :--------: |
-|  WMT17 De-En  |    30.42   |
+The benchmark is performed on 1 GTX 1080Ti GPU with default parameters.
+
+|    Dataset    |    BLEU    |  BLEU (cased) |
+| :-----------: | :--------: | :-----------: |
+|  WMT17 En-De  |    22.81   |     22.30     |
+|  WMT17 De-En  |    29.01   |     27.69     |
 
 * More benchmarks will be added soon.
 

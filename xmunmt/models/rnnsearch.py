@@ -398,7 +398,7 @@ class RNNsearch(NMTModel):
             label_smoothing=0.1,
             constant_batch_size=True,
             batch_size=128,
-            max_length=80,
+            max_length=60,
             clip_grad_norm=5.0
         )
 
