@@ -4,16 +4,20 @@
 # Author: Zhixing Tan
 # Contact: playinf@stu.xmu.edu.cn
 
-import os
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import itertools
+import os
+
 import numpy as np
 import tensorflow as tf
-
-import xmunmt.models as models
-import xmunmt.utils.search as search
 import xmunmt.data.dataset as dataset
 import xmunmt.data.vocab as vocabulary
+import xmunmt.models as models
+import xmunmt.utils.search as search
 
 
 def parse_args():

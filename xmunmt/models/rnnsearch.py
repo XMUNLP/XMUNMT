@@ -8,6 +8,7 @@ from __future__ import division
 from __future__ import print_function
 
 import copy
+
 import tensorflow as tf
 import xmunmt.layers as layers
 import xmunmt.utils.search as search
@@ -326,6 +327,10 @@ def model_graph(features, labels, params):
 
 
 class RNNsearch(NMTModel):
+    """
+    Reference:
+        Neural Machine Translation by Jointly Learning to Align and Translate
+    """
 
     def __init__(self, params, scope="rnnsearch"):
         super(RNNsearch, self).__init__(params=params, scope=scope)

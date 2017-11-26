@@ -4,7 +4,6 @@
 # Contact: playinf@stu.xmu.edu.cn
 
 import tensorflow as tf
-
+import xmunmt.layers.attention
 import xmunmt.layers.nn
 import xmunmt.layers.rnn_cell
-import xmunmt.layers.attention

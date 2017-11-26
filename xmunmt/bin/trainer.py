@@ -8,18 +8,18 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
 import argparse
+import os
+
 import numpy as np
 import tensorflow as tf
-
-import xmunmt.models as models
-import xmunmt.data.record as record
-import xmunmt.utils.search as search
 import xmunmt.data.dataset as dataset
+import xmunmt.data.record as record
 import xmunmt.data.vocab as vocabulary
-import xmunmt.utils.parallel as parallel
+import xmunmt.models as models
 import xmunmt.utils.hooks as hooks
+import xmunmt.utils.parallel as parallel
+import xmunmt.utils.search as search
 
 
 def parse_args(args=None):

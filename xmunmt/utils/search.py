@@ -10,7 +10,6 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-
 # Default value for INF
 INF = 1. * 1e7
 
@@ -173,8 +172,8 @@ def beam_search(symbols_to_logits_fn, initial_ids, beam_size, decode_length,
         curr_finished_flags = tf.concat([finished_flags, curr_finished],
                                         axis=1)
         return compute_topk_scores_and_seq(
-                curr_finished_seq, curr_finished_scores, curr_finished_scores,
-                curr_finished_flags, beam_size, batch_size)
+            curr_finished_seq, curr_finished_scores, curr_finished_scores,
+            curr_finished_flags, beam_size, batch_size)
 
     def grow_alive(curr_seq, curr_scores, curr_log_probs, curr_finished):
         """Given sequences and scores, will gather the top k=beam size
@@ -290,7 +289,7 @@ def beam_search(symbols_to_logits_fn, initial_ids, beam_size, decode_length,
 
         # Append the most probable alive
         topk_seq = tf.concat([topk_seq, tf.expand_dims(topk_ids, axis=2)],
-                              axis=2)
+                             axis=2)
 
         topk_finished = tf.equal(topk_ids, eos_id)
 
@@ -437,9 +436,9 @@ def beam_search(symbols_to_logits_fn, initial_ids, beam_size, decode_length,
     # batch index had reached EOS. We need to do the same for the scores as
     # well.
     finished_seq = tf.where(
-            tf.reduce_any(finished_flags, 1), finished_seq, alive_seq)
+        tf.reduce_any(finished_flags, 1), finished_seq, alive_seq)
     finished_scores = tf.where(
-            tf.reduce_any(finished_flags, 1), finished_scores, alive_log_probs)
+        tf.reduce_any(finished_flags, 1), finished_scores, alive_log_probs)
     return finished_seq, finished_scores
 
 

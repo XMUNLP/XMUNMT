@@ -36,4 +36,3 @@ def get_control_mapping(vocab, symbols):
                 mapping[symbol] = i
 
     return mapping
-

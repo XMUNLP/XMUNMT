@@ -8,7 +8,6 @@ from __future__ import division
 from __future__ import print_function
 
 import math
-
 from collections import Counter
 
 
@@ -36,7 +35,7 @@ def shortest_length(references):
 
 def modified_precision(candidate, references, n):
     tngrams = len(candidate) + 1 - n
-    counts = Counter([tuple(candidate[i:i+n]) for i in range(tngrams)])
+    counts = Counter([tuple(candidate[i:i + n]) for i in range(tngrams)])
 
     if len(counts) == 0:
         return 0, 0
@@ -44,7 +43,7 @@ def modified_precision(candidate, references, n):
     max_counts = {}
     for reference in references:
         rngrams = len(reference) + 1 - n
-        ngrams = [tuple(reference[i:i+n]) for i in range(rngrams)]
+        ngrams = [tuple(reference[i:i + n]) for i in range(rngrams)]
         ref_counts = Counter(ngrams)
         for ngram in counts:
             mcount = 0 if ngram not in max_counts else max_counts[ngram]
