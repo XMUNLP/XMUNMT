@@ -116,8 +116,7 @@ def _decoder(cell, inputs, memory, sequence_length, initial_state, dtype=None,
         mem_mask = tf.sequence_mask(sequence_length["source"],
                                     maxlen=tf.shape(memory)[1],
                                     dtype=tf.float32)
-        bias = layers.attention.attention_bias(mem_mask, "masking")
-        bias = tf.squeeze(bias, axis=[1, 2])
+        bias = layers.attention.attention_bias(mem_mask)
         cache = layers.attention.attention(None, memory, None, output_size)
 
         input_ta = tf.TensorArray(tf.float32, time_steps,

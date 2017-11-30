@@ -2,7 +2,6 @@
 # Copyright 2017 Natural Language Processing Lab of Xiamen University
 # Author: Zhixing Tan
 # Contact: playinf@stu.xmu.edu.cn
-# Disclaimer: Part of this code is modified from the Tensor2Tensor library
 
 from __future__ import absolute_import
 from __future__ import division
@@ -14,24 +13,14 @@ import tensorflow as tf
 from xmunmt.layers.nn import linear
 
 
-def attention_bias(inputs, mode, inf=-1e9, name=None):
+def attention_bias(inputs, inf=-1e9, name=None):
     """ A bias tensor used in attention mechanism
     """
 
     with tf.name_scope(name, default_name="attention_bias", values=[inputs]):
-        if mode == "casual":
-            length = inputs
-            lower_triangle = tf.matrix_band_part(
-                tf.ones([length, length]), -1, 0
-            )
-            ret = inf * (1.0 - lower_triangle)
-            return tf.reshape(ret, [1, 1, length, length])
-        elif mode == "masking":
-            mask = inputs
-            ret = (1.0 - mask) * inf
-            return tf.expand_dims(tf.expand_dims(ret, 1), 1)
-        else:
-            raise ValueError("Unknown mode %s" % mode)
+        mask = inputs
+        bias = (1.0 - mask) * inf
+        return bias
 
 
 def attention(query, memories, bias, hidden_size, cache=None, reuse=None,
