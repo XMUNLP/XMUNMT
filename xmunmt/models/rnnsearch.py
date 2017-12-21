@@ -10,10 +10,8 @@ from __future__ import print_function
 import copy
 
 import tensorflow as tf
+import xmunmt.interface as interface
 import xmunmt.layers as layers
-import xmunmt.utils.search as search
-
-from .model import NMTModel
 
 
 def _copy_through(time, length, output, new_output):
@@ -325,7 +323,7 @@ def model_graph(features, labels, params):
     return loss
 
 
-class RNNsearch(NMTModel):
+class RNNsearch(interface.NMTModel):
     """
     Reference:
         Neural Machine Translation by Jointly Learning to Align and Translate

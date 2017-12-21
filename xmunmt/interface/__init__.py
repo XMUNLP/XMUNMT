@@ -7,13 +7,4 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import xmunmt.models.rnnsearch
-
-
-def get_model(name):
-    name = name.lower()
-
-    if name == "rnnsearch":
-        return xmunmt.models.rnnsearch.RNNsearch
-    else:
-        raise LookupError("Unknown model %s" % name)
+from xmunmt.interface.model import NMTModel
