@@ -125,9 +125,11 @@ def parallel_model(model_fn, features, devices, use_cpu=False):
         devices += ["cpu:0"]
 
     if len(devices) == 1:
-        return [model_fn(features)]
+        outputs = [model_fn(features)]
+        if isinstance(outputs[0], (list, tuple)):
+            outputs = list(zip(*outputs))
+    else:
+        features = shard_features(features, devices)
+        outputs = data_parallelism(devices, model_fn, features)
 
-    features = shard_features(features, devices)
-
-    outputs = data_parallelism(devices, model_fn, features)
     return outputs
